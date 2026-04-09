@@ -12,3 +12,4 @@ public/
 .DS_Store
 Thumbs.db
 db.json
+.deploy_git/
