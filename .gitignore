@@ -5,3 +5,10 @@ db.json
 node_modules/
 public/
 .deploy_git/
+node_modules/
+.deploy_git/
+public/
+*.log
+.DS_Store
+Thumbs.db
+db.json
