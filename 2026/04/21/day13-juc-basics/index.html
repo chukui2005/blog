@@ -1,0 +1,261 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>【学习打卡】Day 13 — JUC多线程基础 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Day 13 — JUC多线程基础 黑马Java面试课 BV1yT411H7YK P86-P92  一、进程和线程的区别进程：用来加载指令、管理内存、管理IO。当一个程序被运行，从磁盘加载代码至内存，就开启了一个进程。 线程：进程中的一个实体，是CPU调度和分派的基本单位。 主要区别：  进程是资源分配的最小单位 线程是CPU调度的最小单位 各个进程之间相互独立 各个线程之间共享进程的内存资源">
+<meta property="og:type" content="article">
+<meta property="og:title" content="【学习打卡】Day 13 — JUC多线程基础">
+<meta property="og:url" content="https://chukui2005.github.io/2026/04/21/day13-juc-basics/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="Day 13 — JUC多线程基础 黑马Java面试课 BV1yT411H7YK P86-P92  一、进程和线程的区别进程：用来加载指令、管理内存、管理IO。当一个程序被运行，从磁盘加载代码至内存，就开启了一个进程。 线程：进程中的一个实体，是CPU调度和分派的基本单位。 主要区别：  进程是资源分配的最小单位 线程是CPU调度的最小单位 各个进程之间相互独立 各个线程之间共享进程的内存资源">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/butterfly-icon.png">
+<meta property="article:published_time" content="2026-04-20T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-04-28T02:00:43.378Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="Java">
+<meta property="article:tag" content="多线程">
+<meta property="article:tag" content="JUC">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/butterfly-icon.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "【学习打卡】Day 13 — JUC多线程基础",
+  "url": "https://chukui2005.github.io/2026/04/21/day13-juc-basics/",
+  "image": "https://chukui2005.github.io/img/butterfly-icon.png",
+  "datePublished": "2026-04-20T16:00:00.000Z",
+  "dateModified": "2026-04-28T02:00:43.378Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/04/21/day13-juc-basics/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '【学习打卡】Day 13 — JUC多线程基础',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">【学习打卡】Day 13 — JUC多线程基础</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">【学习打卡】Day 13 — JUC多线程基础</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-20T16:00:00.000Z" title="发表于 2026-04-21 00:00:00">2026-04-21</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-04-28T02:00:43.378Z" title="更新于 2026-04-28 10:00:43">2026-04-28</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/%E5%AD%A6%E4%B9%A0%E6%89%93%E5%8D%A1/">学习打卡</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="Day-13-—-JUC多线程基础"><a href="#Day-13-—-JUC多线程基础" class="headerlink" title="Day 13 — JUC多线程基础"></a>Day 13 — JUC多线程基础</h1><blockquote>
+<p>黑马Java面试课 BV1yT411H7YK P86-P92</p>
+</blockquote>
+<h2 id="一、进程和线程的区别"><a href="#一、进程和线程的区别" class="headerlink" title="一、进程和线程的区别"></a>一、进程和线程的区别</h2><p><strong>进程</strong>：用来加载指令、管理内存、管理IO。当一个程序被运行，从磁盘加载代码至内存，就开启了一个进程。</p>
+<p><strong>线程</strong>：进程中的一个实体，是CPU调度和分派的基本单位。</p>
+<p><strong>主要区别</strong>：</p>
+<ul>
+<li>进程是资源分配的最小单位</li>
+<li>线程是CPU调度的最小单位</li>
+<li>各个进程之间相互独立</li>
+<li>各个线程之间共享进程的内存资源</li>
+</ul>
+<h2 id="二、并行与并发的区别"><a href="#二、并行与并发的区别" class="headerlink" title="二、并行与并发的区别"></a>二、并行与并发的区别</h2><p><strong>并发</strong>：同一时间应对多件事情的能力。在单核CPU下，线程实际串行执行，通过任务调度器分配时间片；多核CPU下，多个线程轮流使用一个或多个CPU。</p>
+<p><strong>并行</strong>：同一时间动手做多件事情的能力。例如4核CPU同时执行4个线程。</p>
+<h2 id="三、线程创建的方式"><a href="#三、线程创建的方式" class="headerlink" title="三、线程创建的方式"></a>三、线程创建的方式</h2><p>共有四种方式：</p>
+<ol>
+<li>继承Thread类</li>
+<li>实现Runnable接口</li>
+<li>实现Callable接口</li>
+<li>线程池创建线程（项目中最常用方式）</li>
+</ol>
+<p><strong>Runnable vs Callable</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th>Runnable</th>
+<th>Callable</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>返回值</td>
+<td>run()没有返回值</td>
+<td>call()有返回值（泛型）</td>
+</tr>
+<tr>
+<td>异常处理</td>
+<td>只能在内部消化</td>
+<td>允许抛出异常</td>
+</tr>
+</tbody></table>
+<p>**start() vs run()**：</p>
+<ul>
+<li>start()：用来启动线程，通过该线程调用run方法执行逻辑代码。start方法只能被调用一次。</li>
+<li>run()：封装了要被线程执行的代码，可以被调用多次（但直接调用相当于执行普通方法，不会启动新线程）。</li>
+</ul>
+<h2 id="四、线程的状态及变化"><a href="#四、线程的状态及变化" class="headerlink" title="四、线程的状态及变化"></a>四、线程的状态及变化</h2><p>六种状态：</p>
+<ul>
+<li><strong>NEW</strong>：创建线程对象</li>
+<li><strong>RUNNABLE</strong>：调用start()方法，有执行资格但没有执行权</li>
+<li><strong>BLOCKED</strong>：未获取到锁，进入阻塞状态；获得锁后切换为可运行状态</li>
+<li><strong>WAITING</strong>：调用wait()方法进入；被notify()唤醒后切换为可运行状态</li>
+<li><strong>TIMED_WAITING</strong>：调用sleep(long)等方法进入；时间到后切换为可运行状态</li>
+<li><strong>TERMINATED</strong>：线程执行完成或异常退出</li>
+</ul>
+<h2 id="五、join-、notify-、notifyAll"><a href="#五、join-、notify-、notifyAll" class="headerlink" title="五、join()、notify()、notifyAll()"></a>五、join()、notify()、notifyAll()</h2><p>**join()**：t.join() 会阻塞调用此方法的线程进入timed waiting，直到线程t执行完成后，此线程再继续执行。</p>
+<p>**notify() vs notifyAll()**：</p>
+<ul>
+<li>notifyAll()：唤醒所有处于wait状态的线程</li>
+<li>notify()：只随机唤醒一个处于wait状态的线程</li>
+</ul>
+<h2 id="六、wait-和-sleep-的区别"><a href="#六、wait-和-sleep-的区别" class="headerlink" title="六、wait() 和 sleep() 的区别"></a>六、wait() 和 sleep() 的区别</h2><table>
+<thead>
+<tr>
+<th>对比维度</th>
+<th>wait()</th>
+<th>sleep()</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>方法归属</td>
+<td>Object的成员方法</td>
+<td>Thread的静态方法</td>
+</tr>
+<tr>
+<td>醒来时机</td>
+<td>等待相应毫秒后醒来，或被notify唤醒</td>
+<td>等待相应毫秒后醒来</td>
+</tr>
+<tr>
+<td>锁特性</td>
+<td>必须先获取对象锁；执行后会释放对象锁</td>
+<td>无需获取对象锁；如果在synchronized块中执行，不会释放对象锁</td>
+</tr>
+</tbody></table>
+<h2 id="七、synchronized关键字底层原理"><a href="#七、synchronized关键字底层原理" class="headerlink" title="七、synchronized关键字底层原理"></a>七、synchronized关键字底层原理</h2><p><strong>基本机制</strong>：Synchronized采用互斥的方式让同一时刻至多只有一个线程能持有对象锁。</p>
+<p><strong>底层实现</strong>：由Monitor（监视器，JVM级别C++实现）实现，线程获得锁需要对象关联Monitor。</p>
+<p><strong>Monitor三大属性</strong>：</p>
+<ul>
+<li><strong>Owner</strong>：存储当前获取锁的线程，只能关联一个线程</li>
+<li><strong>EntryList</strong>：关联没有抢到锁的线程，处于Blocked状态</li>
+<li><strong>WaitSet</strong>：关联调用了wait方法的线程，处于Waiting状态</li>
+</ul>
+<h2 id="八、锁升级机制（JDK-1-6-）"><a href="#八、锁升级机制（JDK-1-6-）" class="headerlink" title="八、锁升级机制（JDK 1.6+）"></a>八、锁升级机制（JDK 1.6+）</h2><p><strong>偏向锁</strong>：一段很长时间内只被一个线程使用锁。第一次获取锁时有CAS操作设置线程ID，之后只需判断Mark Word中是否是自己的线程ID即可，无需CAS。</p>
+<p><strong>轻量级锁</strong>：线程加锁时间是错开的（没有竞争）。在线程栈中创建Lock Record，通过CAS修改对象头的Mark Word。若CAS失败说明发生竞争，膨胀为重量级锁。</p>
+<p><strong>重量级锁</strong>：底层使用Monitor实现，涉及用户态和内核态切换、进程上下文切换，成本高。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/04/21/day13-juc-basics/">https://chukui2005.github.io/2026/04/21/day13-juc-basics/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Java/">Java</a><a class="post-meta__tags" href="/blog/tags/%E5%A4%9A%E7%BA%BF%E7%A8%8B/">多线程</a><a class="post-meta__tags" href="/blog/tags/JUC/">JUC</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/butterfly-icon.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/04/22/day14-juc-core/" title="【学习打卡】Day 14 — JUC核心与并发安全"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">【学习打卡】Day 14 — JUC核心与并发安全</div></div><div class="info-2"><div class="info-item-1">Day 14 — JUC核心与并发安全 黑马Java面试课 BV1yT411H7YK P93-P105  一、如何停止一个正在运行的线程三种方式：  标志位：使用退出标志，使线程正常退出 **interrupt()**：打断阻塞的线程（sleep, wait, join）会抛异常；打断正常线程可根据打断状态标记退出 **stop()**（不推荐，已废弃）：会直接终止线程，不释放锁，可能导致数据不一致  二、CAS（Compare And Swap）全称：比较再交换，体现乐观锁思想，在无锁情况下保证线程操作共享数据的原子性。 流程：包含当前内存值V、旧的预期值A、即将更新的值B。当且仅当A和V相同时，将V修改为B并返回true，否则什么都不做并返回false。失败后通过自旋等待再次尝试。 底层实现：依赖Unsafe类直接调用操作系统底层的CAS指令。 优缺点：没有加锁，线程不会陷入阻塞，效率较高；但如果竞争激烈，重试频繁发生，效率会受影响。 三、JMM（Java内存模型）定义了共享内存中多线程程序读写操作的行为规范。 把内存分为两块：  工作内存：私有线程的工作区域 主内存：所有线...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/17/day12-hashmap/" title="【学习打卡】Day 12 — HashMap 面试必问 9 道题"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">【学习打卡】Day 12 — HashMap 面试必问 9 道题</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 12 — HashMap 面试必问 9 道题 作者：初魁 | 学习周期：Java后端面试冲刺第12天 | 适合人群：Java后端求职者   1. HashMap 的 put() 流程 计算 key 的 hashCode()，经过哈希扰动得到哈希值 用 (n-1) &amp; hash 计算下标（桶位置） 桶头节点为空 → 直接插入新节点 头节点不为空 → 遍历链表&#x2F;红黑树，用 equals() 比较 key key 已存在 → 覆盖旧值 key 不存在 → 插入新节点（JDK 1.8 尾插法）   插入后判断链表长度是否达到树化阈值（≥8），超过则转红黑树 size++，判断是否超过 capacity × loadFactor（默认 0.75），超过则扩容 2 倍   2. HashMap 容量为什么总是 2 的幂次？为了高效计算下标位置。 (n-1) &amp; hash &#x3D; 用位运算代替取模运算。 当 n&#x3D;16（2⁴）时，n-1 = 15 = 1111（二进制），任何 hash 与 1111 按位与，结果都在 0~15 之间，...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/04/22/day14-juc-core/" title="【学习打卡】Day 14 — JUC核心与并发安全"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-22</div><div class="info-item-2">【学习打卡】Day 14 — JUC核心与并发安全</div></div><div class="info-2"><div class="info-item-1">Day 14 — JUC核心与并发安全 黑马Java面试课 BV1yT411H7YK P93-P105  一、如何停止一个正在运行的线程三种方式：  标志位：使用退出标志，使线程正常退出 **interrupt()**：打断阻塞的线程（sleep, wait, join）会抛异常；打断正常线程可根据打断状态标记退出 **stop()**（不推荐，已废弃）：会直接终止线程，不释放锁，可能导致数据不一致  二、CAS（Compare And Swap）全称：比较再交换，体现乐观锁思想，在无锁情况下保证线程操作共享数据的原子性。 流程：包含当前内存值V、旧的预期值A、即将更新的值B。当且仅当A和V相同时，将V修改为B并返回true，否则什么都不做并返回false。失败后通过自旋等待再次尝试。 底层实现：依赖Unsafe类直接调用操作系统底层的CAS指令。 优缺点：没有加锁，线程不会陷入阻塞，效率较高；但如果竞争激烈，重试频繁发生，效率会受影响。 三、JMM（Java内存模型）定义了共享内存中多线程程序读写操作的行为规范。 把内存分为两块：  工作内存：私有线程的工作区域 主内存：所有线...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/17/day12-hashmap/" title="【学习打卡】Day 12 — HashMap 面试必问 9 道题"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-17</div><div class="info-item-2">【学习打卡】Day 12 — HashMap 面试必问 9 道题</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 12 — HashMap 面试必问 9 道题 作者：初魁 | 学习周期：Java后端面试冲刺第12天 | 适合人群：Java后端求职者   1. HashMap 的 put() 流程 计算 key 的 hashCode()，经过哈希扰动得到哈希值 用 (n-1) &amp; hash 计算下标（桶位置） 桶头节点为空 → 直接插入新节点 头节点不为空 → 遍历链表&#x2F;红黑树，用 equals() 比较 key key 已存在 → 覆盖旧值 key 不存在 → 插入新节点（JDK 1.8 尾插法）   插入后判断链表长度是否达到树化阈值（≥8），超过则转红黑树 size++，判断是否超过 capacity × loadFactor（默认 0.75），超过则扩容 2 倍   2. HashMap 容量为什么总是 2 的幂次？为了高效计算下标位置。 (n-1) &amp; hash &#x3D; 用位运算代替取模运算。 当 n&#x3D;16（2⁴）时，n-1 = 15 = 1111（二进制），任何 hash 与 1111 按位与，结果都在 0~15 之间，...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/15/day10-arraylist/" title="【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-15</div><div class="info-item-2">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第10天 | 适合人群：Java后端求职者   一、ArrayList 底层原理1. 底层数据结构Object[] 数组（动态数组）。 2. add() 扩容机制add(E e) 流程：  判断 size + 1 是否大于当前数组长度 大于 → 触发扩容 grow()，新容量 &#x3D; 旧容量 × 1.5 扩容实际是创建新数组，用 Arrays.copyOf() 复制原数组 把元素放入下标 size 位置，size++  默认初始容量 10，懒加载。 3. Arrays.asList() 的坑Arrays.asList(&quot;a&quot;, &quot;b&quot;, &quot;c&quot;) 返回的不是 java.util.ArrayList，而是 Arrays.ArrayList——一个固定长度的内部类。  set() 修改元素：不会报错，直接修改原数组 remove() 删除元素：抛 UnsupportedOperation...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/blog/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description"></div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">12</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">20</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">1</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Day-13-%E2%80%94-JUC%E5%A4%9A%E7%BA%BF%E7%A8%8B%E5%9F%BA%E7%A1%80"><span class="toc-number">1.</span> <span class="toc-text">Day 13 — JUC多线程基础</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E8%BF%9B%E7%A8%8B%E5%92%8C%E7%BA%BF%E7%A8%8B%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-number">1.1.</span> <span class="toc-text">一、进程和线程的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%B9%B6%E8%A1%8C%E4%B8%8E%E5%B9%B6%E5%8F%91%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-number">1.2.</span> <span class="toc-text">二、并行与并发的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E7%BA%BF%E7%A8%8B%E5%88%9B%E5%BB%BA%E7%9A%84%E6%96%B9%E5%BC%8F"><span class="toc-number">1.3.</span> <span class="toc-text">三、线程创建的方式</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E7%BA%BF%E7%A8%8B%E7%9A%84%E7%8A%B6%E6%80%81%E5%8F%8A%E5%8F%98%E5%8C%96"><span class="toc-number">1.4.</span> <span class="toc-text">四、线程的状态及变化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81join-%E3%80%81notify-%E3%80%81notifyAll"><span class="toc-number">1.5.</span> <span class="toc-text">五、join()、notify()、notifyAll()</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81wait-%E5%92%8C-sleep-%E7%9A%84%E5%8C%BA%E5%88%AB"><span class="toc-number">1.6.</span> <span class="toc-text">六、wait() 和 sleep() 的区别</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81synchronized%E5%85%B3%E9%94%AE%E5%AD%97%E5%BA%95%E5%B1%82%E5%8E%9F%E7%90%86"><span class="toc-number">1.7.</span> <span class="toc-text">七、synchronized关键字底层原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E9%94%81%E5%8D%87%E7%BA%A7%E6%9C%BA%E5%88%B6%EF%BC%88JDK-1-6-%EF%BC%89"><span class="toc-number">1.8.</span> <span class="toc-text">八、锁升级机制（JDK 1.6+）</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/22/day14-juc-core/" title="【学习打卡】Day 14 — JUC核心与并发安全">【学习打卡】Day 14 — JUC核心与并发安全</a><time datetime="2026-04-21T16:00:00.000Z" title="发表于 2026-04-22 00:00:00">2026-04-22</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/21/day13-juc-basics/" title="【学习打卡】Day 13 — JUC多线程基础">【学习打卡】Day 13 — JUC多线程基础</a><time datetime="2026-04-20T16:00:00.000Z" title="发表于 2026-04-21 00:00:00">2026-04-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/17/day12-hashmap/" title="【学习打卡】Day 12 — HashMap 面试必问 9 道题">【学习打卡】Day 12 — HashMap 面试必问 9 道题</a><time datetime="2026-04-17T04:00:00.000Z" title="发表于 2026-04-17 12:00:00">2026-04-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/15/day10-arraylist/" title="【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点</a><time datetime="2026-04-15T04:00:00.000Z" title="发表于 2026-04-15 12:00:00">2026-04-15</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/14/day9-spring/" title="【学习打卡】Day 9 — Spring 框架核心知识点">【学习打卡】Day 9 — Spring 框架核心知识点</a><time datetime="2026-04-14T04:00:00.000Z" title="发表于 2026-04-14 12:00:00">2026-04-14</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
