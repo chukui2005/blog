@@ -1,315 +1,35 @@
-<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>【学习打卡】Day 9 — Spring 框架核心知识点 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="【学习打卡】Day 9 — Spring 框架核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第9天 | 适合人群：Java后端求职者   一、Spring 框架1. 单例 Bean 的线程安全问题结论：Spring 框架中的单例 Bean 不是线程安全的。 原因：  Spring 框架没有对单例 Bean 进行任何多线程的封装处理 多用户并发请求时，容器给每个请求分配一个线程，并发执行">
-<meta property="og:type" content="article">
-<meta property="og:title" content="【学习打卡】Day 9 — Spring 框架核心知识点">
-<meta property="og:url" content="https://chukui2005.github.io/2026/04/14/day9-spring/index.html">
-<meta property="og:site_name" content="初魁的技术博客">
-<meta property="og:description" content="【学习打卡】Day 9 — Spring 框架核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第9天 | 适合人群：Java后端求职者   一、Spring 框架1. 单例 Bean 的线程安全问题结论：Spring 框架中的单例 Bean 不是线程安全的。 原因：  Spring 框架没有对单例 Bean 进行任何多线程的封装处理 多用户并发请求时，容器给每个请求分配一个线程，并发执行">
-<meta property="og:locale" content="zh_CN">
-<meta property="og:image" content="https://chukui2005.github.io/img/butterfly-icon.png">
-<meta property="article:published_time" content="2026-04-14T04:00:00.000Z">
-<meta property="article:modified_time" content="2026-04-17T05:03:01.838Z">
-<meta property="article:author" content="初魁">
-<meta property="article:tag" content="Java后端">
-<meta property="article:tag" content="Spring">
-<meta property="article:tag" content="框架">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://chukui2005.github.io/img/butterfly-icon.png"><script type="application/ld+json">{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "【学习打卡】Day 9 — Spring 框架核心知识点",
-  "url": "https://chukui2005.github.io/2026/04/14/day9-spring/",
-  "image": "https://chukui2005.github.io/img/butterfly-icon.png",
-  "datePublished": "2026-04-14T04:00:00.000Z",
-  "dateModified": "2026-04-17T05:03:01.838Z",
-  "author": [
-    {
-      "@type": "Person",
-      "name": "初魁",
-      "url": "https://github.com/chukui2005"
-    }
-  ]
-}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/04/14/day9-spring/index.html"><link rel="preconnect"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.4"><link rel="stylesheet" href="/blog/pluginsSrc/@fortawesome/fontawesome-free/css/all.min.css?v=7.1.0"><script>
-    (() => {
-      
-    const saveToLocal = {
-      set: (key, value, ttl) => {
-        if (!ttl) return
-        const expiry = Date.now() + ttl * 86400000
-        localStorage.setItem(key, JSON.stringify({ value, expiry }))
-      },
-      get: key => {
-        const itemStr = localStorage.getItem(key)
-        if (!itemStr) return undefined
-        const { value, expiry } = JSON.parse(itemStr)
-        if (Date.now() > expiry) {
-          localStorage.removeItem(key)
-          return undefined
-        }
-        return value
-      }
-    }
+extends includes/layout.pug
 
-    window.btf = {
-      saveToLocal,
-      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = url
-        script.async = true
-        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
-        script.onload = script.onreadystatechange = () => {
-          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
-        }
-        script.onerror = reject
-        document.head.appendChild(script)
-      }),
-      getCSS: (url, id) => new Promise((resolve, reject) => {
-        const link = document.createElement('link')
-        link.rel = 'stylesheet'
-        link.href = url
-        if (id) link.id = id
-        link.onload = link.onreadystatechange = () => {
-          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
-        }
-        link.onerror = reject
-        document.head.appendChild(link)
-      }),
-      addGlobalFn: (key, fn, name = false, parent = window) => {
-        if (!false && key.startsWith('pjax')) return
-        const globalFn = parent.globalFn || {}
-        globalFn[key] = globalFn[key] || {}
-        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
-        parent.globalFn = globalFn
-      }
-    }
-  
-      
-      const activateDarkMode = () => {
-        document.documentElement.setAttribute('data-theme', 'dark')
-        if (document.querySelector('meta[name="theme-color"]') !== null) {
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
-        }
-      }
-      const activateLightMode = () => {
-        document.documentElement.setAttribute('data-theme', 'light')
-        if (document.querySelector('meta[name="theme-color"]') !== null) {
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
-        }
-      }
+block content
+  #post
+    if top_img === false
+      include includes/header/post-info.pug
 
-      btf.activateDarkMode = activateDarkMode
-      btf.activateLightMode = activateLightMode
+    article#article-container.container.post-content
+      if theme.noticeOutdate.enable && page.noticeOutdate !== false
+        include includes/post/outdate-notice.pug
+      else
+        !=page.content
+    include includes/post/post-copyright.pug
+    .tag_share
+      if (page.tags.length > 0 && theme.post_meta.post.tags)
+        .post-meta__tag-list
+          each item, index in page.tags.data
+            a(href=url_for(item.path)).post-meta__tags #[=item.name]
+      include includes/third-party/share/index.pug
 
-      const theme = saveToLocal.get('theme')
-    
-          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
-        
-      
-      const asideStatus = saveToLocal.get('aside-status')
-      if (asideStatus !== undefined) {
-        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
-      }
-    
-      
-    const detectApple = () => {
-      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
-        document.documentElement.classList.add('apple')
-      }
-    }
-    detectApple()
-  
-    })()
-  </script><script>const GLOBAL_CONFIG = {
-  root: '/blog/',
-  algolia: undefined,
-  localSearch: undefined,
-  translate: undefined,
-  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
-  copy: {
-    success: '复制成功',
-    error: '复制失败',
-    noSupport: '浏览器不支持'
-  },
-  relativeDate: {
-    homepage: false,
-    post: false
-  },
-  runtime: '',
-  dateSuffix: {
-    just: '刚刚',
-    min: '分钟前',
-    hour: '小时前',
-    day: '天前',
-    month: '个月前'
-  },
-  copyright: undefined,
-  lightbox: 'null',
-  Snackbar: undefined,
-  infinitegrid: {
-    js: '/blog/pluginsSrc/@egjs/infinitegrid/dist/infinitegrid.min.js?v=4.13.0',
-    buttonText: '加载更多'
-  },
-  isPhotoFigcaption: false,
-  islazyloadPlugin: false,
-  isAnchor: false,
-  percent: {
-    toc: true,
-    rightside: false,
-  },
-  autoDarkmode: false
-}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
-  title: '【学习打卡】Day 9 — Spring 框架核心知识点',
-  isHighlightShrink: false,
-  isToc: true,
-  pageType: 'post'
-}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">【学习打卡】Day 9 — Spring 框架核心知识点</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">【学习打卡】Day 9 — Spring 框架核心知识点</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-14T04:00:00.000Z" title="发表于 2026-04-14 12:00:00">2026-04-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-04-17T05:03:01.838Z" title="更新于 2026-04-17 13:03:01">2026-04-17</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/%E5%AD%A6%E4%B9%A0%E6%89%93%E5%8D%A1/">学习打卡</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="【学习打卡】Day-9-—-Spring-框架核心知识点"><a href="#【学习打卡】Day-9-—-Spring-框架核心知识点" class="headerlink" title="【学习打卡】Day 9 — Spring 框架核心知识点"></a>【学习打卡】Day 9 — Spring 框架核心知识点</h1><blockquote>
-<p>作者：初魁 | 学习周期：Java后端面试冲刺第9天 | 适合人群：Java后端求职者</p>
-</blockquote>
-<hr>
-<h2 id="一、Spring-框架"><a href="#一、Spring-框架" class="headerlink" title="一、Spring 框架"></a>一、Spring 框架</h2><h3 id="1-单例-Bean-的线程安全问题"><a href="#1-单例-Bean-的线程安全问题" class="headerlink" title="1. 单例 Bean 的线程安全问题"></a>1. 单例 Bean 的线程安全问题</h3><p><strong>结论</strong>：Spring 框架中的单例 Bean <strong>不是线程安全的</strong>。</p>
-<p><strong>原因</strong>：</p>
-<ul>
-<li>Spring 框架没有对单例 Bean 进行任何多线程的封装处理</li>
-<li>多用户并发请求时，容器给每个请求分配一个线程，并发执行对应业务逻辑（成员方法）</li>
-<li>如果业务逻辑中有对单例 Bean 状态的修改（成员属性修改），则必须考虑线程同步问题</li>
-</ul>
-<p><strong>实际情况</strong>：项目中常用的 Service、DAO 类通常没有可变状态，因此在某种程度上是线程安全的。如果 Bean 有多种状态（如 ViewModel 对象），需要开发者自行保证线程安全。</p>
-<p><strong>解决方案</strong>：将多态 Bean 的作用域由 singleton 变更为 prototype。</p>
-<hr>
-<h3 id="2-AOP（面向切面编程）"><a href="#2-AOP（面向切面编程）" class="headerlink" title="2. AOP（面向切面编程）"></a>2. AOP（面向切面编程）</h3><p><strong>定义</strong>：将与业务无关，但对多个对象产生影响的公共行为和逻辑，抽取并封装为一个可重用的模块，称为”切面”（Aspect）。</p>
-<p><strong>目的</strong>：减少重复代码，降低模块间耦合度，提高系统可维护性。</p>
-<p><strong>常见应用场景</strong>：记录操作日志、缓存处理、Spring 内置的事务处理。</p>
-<p><strong>核心思路</strong>：</p>
-<ul>
-<li>使用 AOP 中的环绕通知（<code>@Around</code>）和切点表达式定位需要记录日志的方法</li>
-<li>通过环绕通知的参数（<code>ProceedingJoinPoint</code>）获取请求方法的参数</li>
-<li>获取请求的用户名、请求方式、访问地址、模块名称、登录 IP、操作时间等信息</li>
-<li>将信息保存到数据库的日志表中</li>
-</ul>
-<hr>
-<h3 id="3-Spring-事务实现"><a href="#3-Spring-事务实现" class="headerlink" title="3. Spring 事务实现"></a>3. Spring 事务实现</h3><p><strong>实现方式</strong>：</p>
-<ul>
-<li><strong>编程式事务管理</strong>：使用 <code>TransactionTemplate</code>，对业务代码有侵入性，项目中很少使用</li>
-<li><strong>声明式事务管理（常用）</strong>：建立在 AOP 之上。通过 AOP 功能对方法前后进行拦截，在执行方法之前开启事务，执行完目标方法之后根据执行情况提交或回滚事务</li>
-</ul>
-<p><strong>事务失效场景及解决</strong>：</p>
-<table>
-<thead>
-<tr>
-<th>失效场景</th>
-<th>原因</th>
-<th>解决方案</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>异常被 catch</td>
-<td>事务通知只有捕获到目标抛出的异常才能回滚</td>
-<td>在 catch 块中手动抛出运行时异常 <code>throw new RuntimeException(e)</code></td>
-</tr>
-<tr>
-<td>抛出检查异常</td>
-<td>Spring 默认只回滚非检查异常（RuntimeException 子类）</td>
-<td>配置 <code>@Transactional(rollbackFor = Exception.class)</code></td>
-</tr>
-<tr>
-<td>非 public 方法</td>
-<td>Spring 为方法创建代理、添加事务通知的前提是该方法是 public 的</td>
-<td>将方法改为 public</td>
-</tr>
-</tbody></table>
-<hr>
-<h3 id="4-Bean-的生命周期"><a href="#4-Bean-的生命周期" class="headerlink" title="4. Bean 的生命周期"></a>4. Bean 的生命周期</h3><ol>
-<li>通过 <code>BeanDefinition</code> 获取 Bean 的定义信息（封装了类名、属性值、作用域、初始化方法等）</li>
-<li>调用构造函数实例化 Bean</li>
-<li>Bean 的依赖注入（属性赋值）</li>
-<li>处理 Aware 接口（如 <code>BeanNameAware</code>、<code>BeanFactoryAware</code>、<code>ApplicationContextAware</code>）</li>
-<li>Bean 的后置处理器（<code>BeanPostProcessor</code>）- 前置处理</li>
-<li>初始化方法（执行 <code>InitializingBean</code> 接口的 <code>afterPropertiesSet</code> 方法或自定义的 <code>init-method</code>）</li>
-<li>Bean 的后置处理器（<code>BeanPostProcessor</code>）- 后置处理</li>
-<li>销毁 Bean（执行 <code>DisposableBean</code> 接口的 <code>destroy</code> 方法或自定义的 <code>destroy-method</code>）</li>
-</ol>
-<hr>
-<h3 id="5-循环依赖与三级缓存"><a href="#5-循环依赖与三级缓存" class="headerlink" title="5. 循环依赖与三级缓存"></a>5. 循环依赖与三级缓存</h3><p><strong>循环依赖</strong>：两个或两个以上的 Bean 互相持有对方，最终形成闭环（如 A 依赖 B，B 依赖 A）。</p>
-<p><strong>三级缓存解决机制</strong>：</p>
-<table>
-<thead>
-<tr>
-<th>缓存</th>
-<th>源码名称</th>
-<th>作用</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>一级缓存</td>
-<td>SingletonObjects</td>
-<td>单例池，缓存已经历完整生命周期、初始化完成的 Bean 对象</td>
-</tr>
-<tr>
-<td>二级缓存</td>
-<td>earlySingletonObjects</td>
-<td>缓存早期的 Bean 对象（生命周期还没走完）</td>
-</tr>
-<tr>
-<td>三级缓存</td>
-<td>SingletonFactories</td>
-<td>缓存的是 ObjectFactory 对象工厂，用来创建某个对象</td>
-</tr>
-</tbody></table>
-<p><strong>解决流程</strong>（以 A、B 相互依赖为例）：</p>
-<ol>
-<li>实例化 A（半成品），将 A 的 ObjectFactory 放入三级缓存</li>
-<li>初始化 A，发现需要注入 B，但 B 不存在</li>
-<li>实例化 B（半成品），将 B 的 ObjectFactory 放入三级缓存</li>
-<li>初始化 B，发现需要注入 A，从三级缓存中获取 A 的 ObjectFactory，创建 A 的代理对象（半成品），注入给 B，并将 A 的代理对象放入二级缓存</li>
-<li>B 创建成功，放入一级缓存</li>
-<li>将 B 注入给 A，A 创建成功，放入一级缓存</li>
-</ol>
-<p><strong>构造方法循环依赖</strong>：Spring 无法解决构造函数的循环依赖（因为构造函数是 Bean 生命周期的第一步）。解决方案：使用 <code>@Lazy</code> 注解进行懒加载。</p>
-<hr>
-<h2 id="二、SpringMVC-执行流程"><a href="#二、SpringMVC-执行流程" class="headerlink" title="二、SpringMVC 执行流程"></a>二、SpringMVC 执行流程</h2><h3 id="版本1：视图阶段（JSP）"><a href="#版本1：视图阶段（JSP）" class="headerlink" title="版本1：视图阶段（JSP）"></a>版本1：视图阶段（JSP）</h3><ol>
-<li>用户发送请求到前端控制器 <code>DispatcherServlet</code></li>
-<li><code>DispatcherServlet</code> 调用 <code>HandlerMapping</code>（处理器映射器）</li>
-<li><code>HandlerMapping</code> 找到具体的处理器，生成处理器对象及处理器拦截器（如果有），一起返回给 <code>DispatcherServlet</code></li>
-<li><code>DispatcherServlet</code> 调用 <code>HandlerAdapter</code>（处理器适配器）</li>
-<li><code>HandlerAdapter</code> 经过适配调用具体的处理器（<code>Handler/Controller</code>）</li>
-<li><code>Controller</code> 执行完成返回 <code>ModelAndView</code> 对象</li>
-<li><code>HandlerAdapter</code> 将 Controller 执行结果 <code>ModelAndView</code> 返回给 <code>DispatcherServlet</code></li>
-<li><code>DispatcherServlet</code> 将 <code>ModelAndView</code> 传给 <code>ViewResolver</code>（视图解析器）</li>
-<li><code>ViewResolver</code> 解析后返回具体的 <code>View</code>（视图）</li>
-<li><code>DispatcherServlet</code> 根据 <code>View</code> 进行渲染视图（将模型数据填充至视图中）</li>
-<li><code>DispatcherServlet</code> 响应用户</li>
-</ol>
-<h3 id="版本2：前后端分离阶段（接口开发，异步请求）"><a href="#版本2：前后端分离阶段（接口开发，异步请求）" class="headerlink" title="版本2：前后端分离阶段（接口开发，异步请求）"></a>版本2：前后端分离阶段（接口开发，异步请求）</h3><p>前 6 步相同，第 7 步起变为：</p>
-<ol start="7">
-<li>如果方法上添加了 <code>@ResponseBody</code> 注解，则通过 <code>HttpMessageConverter</code> 将返回结果转换为 JSON 并响应给客户端</li>
-</ol>
-<hr>
-<h2 id="三、SpringBoot-自动配置原理"><a href="#三、SpringBoot-自动配置原理" class="headerlink" title="三、SpringBoot 自动配置原理"></a>三、SpringBoot 自动配置原理</h2><p><strong>核心注解</strong>：<code>@SpringBootApplication</code>，封装了三个注解：</p>
-<ul>
-<li><code>@SpringBootConfiguration</code>：声明当前类也是一个配置类（与 <code>@Configuration</code> 作用相同）</li>
-<li><code>@ComponentScan</code>：组件扫描，默认扫描当前引导类所在包及其子包</li>
-<li><code>@EnableAutoConfiguration</code>：SpringBoot 实现自动化配置的核心注解</li>
-</ul>
-<p><strong>自动配置核心流程</strong>：</p>
-<p><code>@EnableAutoConfiguration</code> 通过 <code>@Import</code> 注解导入了 <code>AutoConfigurationImportSelector</code> 类 → 读取项目及所引用 Jar 包的 classpath 路径下 <code>META-INF/spring.factories</code> 文件中配置的所有类的全类名 → 这些配置类中定义的 Bean 会根据条件注解（如 <code>@ConditionalOnClass</code>）所指定的条件来决定是否需要导入到 Spring 容器中</p>
-<hr>
-<h2 id="四、MyBatis"><a href="#四、MyBatis" class="headerlink" title="四、MyBatis"></a>四、MyBatis</h2><h3 id="1-执行流程"><a href="#1-执行流程" class="headerlink" title="1. 执行流程"></a>1. 执行流程</h3><ol>
-<li>读取 MyBatis 配置文件：<code>mybatis-config.xml</code>，加载运行环境和映射文件</li>
-<li>构造会话工厂：<code>SqlSessionFactory</code></li>
-<li>创建会话：<code>SqlSessionFactory</code> 创建 <code>SqlSession</code> 对象（包含了执行 SQL 语句的所有方法）</li>
-<li>操作数据库：通过 <code>Executor</code> 执行器接口执行 SQL，同时负责查询缓存的维护</li>
-<li>封装映射信息：<code>Executor</code> 接口的执行方法中有一个 <code>MappedStatement</code> 类型的参数，封装了映射信息</li>
-<li>输入参数映射</li>
-<li>输出结果映射</li>
-</ol>
-<h3 id="2-延迟加载"><a href="#2-延迟加载" class="headerlink" title="2. 延迟加载"></a>2. 延迟加载</h3><p><strong>定义</strong>：在需要用到数据时才进行加载，不需要用到数据时就不加载数据。默认关闭。</p>
-<p><strong>开启</strong>：在 MyBatis 配置文件中配置 <code>lazyLoadingEnabled=true</code>。</p>
-<p><strong>原理</strong>：使用 CGLIB 创建目标对象的代理对象。当调用目标方法时，进入拦截器 <code>invoke</code> 方法，发现目标属性为 null，执行 SQL 查询关联数据，将结果设置到目标属性中。</p>
-<h3 id="3-一级缓存与二级缓存"><a href="#3-一级缓存与二级缓存" class="headerlink" title="3. 一级缓存与二级缓存"></a>3. 一级缓存与二级缓存</h3><ul>
-<li><strong>一级缓存</strong>：作用域 <code>SqlSession</code> 级别，默认开启。当 Session 进行 flush 或 close 之后，该 Session 中的所有缓存将清空。</li>
-<li><strong>二级缓存</strong>：作用域 <code>namespace</code> 和 mapper 的作用域，不依赖于 <code>SqlSession</code>。默认关闭（需在全局配置文件中开启 + 在 mapper 中使用 <code>&lt;cache/&gt;</code> 标签）。需要进行新增、修改、删除操作后，默认该作用域下所有 select 中的缓存将被清除。</li>
-</ul>
-<hr>
-<blockquote>
-<p>说明：本笔记基于《04-框架篇.pptx》内容整理，涵盖 Spring、SpringMVC、SpringBoot、MyBatis 等主流 Java 框架的核心概念与运行机制。</p>
-</blockquote>
-</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/04/14/day9-spring/">https://chukui2005.github.io/2026/04/14/day9-spring/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Java%E5%90%8E%E7%AB%AF/">Java后端</a><a class="post-meta__tags" href="/blog/tags/Spring/">Spring</a><a class="post-meta__tags" href="/blog/tags/%E6%A1%86%E6%9E%B6/">框架</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/butterfly-icon.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="/blog/pluginsSrc/butterfly-extsrc/sharejs/dist/css/share.min.css?v=1.1.6" media="print" onload="this.media='all'"><script src="/blog/pluginsSrc/butterfly-extsrc/sharejs/dist/js/social-share.min.js?v=1.1.6" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/04/15/day10-arraylist/" title="【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第10天 | 适合人群：Java后端求职者   一、ArrayList 底层原理1. 底层数据结构Object[] 数组（动态数组）。 2. add() 扩容机制add(E e) 流程：  判断 size + 1 是否大于当前数组长度 大于 → 触发扩容 grow()，新容量 &#x3D; 旧容量 × 1.5 扩容实际是创建新数组，用 Arrays.copyOf() 复制原数组 把元素放入下标 size 位置，size++  默认初始容量 10，懒加载。 3. Arrays.asList() 的坑Arrays.asList(&quot;a&quot;, &quot;b&quot;, &quot;c&quot;) 返回的不是 java.util.ArrayList，而是 Arrays.ArrayList——一个固定长度的内部类。  set() 修改元素：不会报错，直接修改原数组 remove() 删除元素：抛 UnsupportedOperation...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/13/day8-mysql/" title="【学习打卡】Day 8 — MySQL 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">【学习打卡】Day 8 — MySQL 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 8 — MySQL 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第8天 | 适合人群：Java后端求职者   一、MySQL 优化1. 定位慢查询慢查询场景：聚合查询、多表查询、表数据量过大、深度分页查询 定位工具：  运维工具：Prometheus、Skywalking MySQL 慢日志：配置 /etc/my.cnf，开启 slow_query_log，设置 long_query_time（默认 10 秒）  2. SQL 执行计划分析（EXPLAIN）   字段 说明    type 连接类型，性能从好到差：system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; all   possible_keys 可能使用的索引   key 实际使用的索引   key_len 索引占用字节数   Extra 额外信息：Using where; Using Index &#x3D; 覆盖索引，无需回表；Using index condition &#x3D; 索引下推，需回表  ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/04/17/day12-hashmap/" title="【学习打卡】Day 12 — HashMap 面试必问 9 道题"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-17</div><div class="info-item-2">【学习打卡】Day 12 — HashMap 面试必问 9 道题</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 12 — HashMap 面试必问 9 道题 作者：初魁 | 学习周期：Java后端面试冲刺第12天 | 适合人群：Java后端求职者   1. HashMap 的 put() 流程 计算 key 的 hashCode()，经过哈希扰动得到哈希值 用 (n-1) &amp; hash 计算下标（桶位置） 桶头节点为空 → 直接插入新节点 头节点不为空 → 遍历链表&#x2F;红黑树，用 equals() 比较 key key 已存在 → 覆盖旧值 key 不存在 → 插入新节点（JDK 1.8 尾插法）   插入后判断链表长度是否达到树化阈值（≥8），超过则转红黑树 size++，判断是否超过 capacity × loadFactor（默认 0.75），超过则扩容 2 倍   2. HashMap 容量为什么总是 2 的幂次？为了高效计算下标位置。 (n-1) &amp; hash &#x3D; 用位运算代替取模运算。 当 n&#x3D;16（2⁴）时，n-1 = 15 = 1111（二进制），任何 hash 与 1111 按位与，结果都在 0~15 之间，...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/13/day8-mysql/" title="【学习打卡】Day 8 — MySQL 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-13</div><div class="info-item-2">【学习打卡】Day 8 — MySQL 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 8 — MySQL 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第8天 | 适合人群：Java后端求职者   一、MySQL 优化1. 定位慢查询慢查询场景：聚合查询、多表查询、表数据量过大、深度分页查询 定位工具：  运维工具：Prometheus、Skywalking MySQL 慢日志：配置 /etc/my.cnf，开启 slow_query_log，设置 long_query_time（默认 10 秒）  2. SQL 执行计划分析（EXPLAIN）   字段 说明    type 连接类型，性能从好到差：system &gt; const &gt; eq_ref &gt; ref &gt; range &gt; index &gt; all   possible_keys 可能使用的索引   key 实际使用的索引   key_len 索引占用字节数   Extra 额外信息：Using where; Using Index &#x3D; 覆盖索引，无需回表；Using index condition &#x3D; 索引下推，需回表  ...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/09/day4-jvm-mysql/" title="【学习打卡】Day 4 — JVM内存模型与MySQL索引"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-09</div><div class="info-item-2">【学习打卡】Day 4 — JVM内存模型与MySQL索引</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 4 — JVM内存模型与MySQL索引 作者：初魁 | 学习周期：Java后端面试冲刺第4天 | 适合人群：Java后端求职者   一、JVM内存模型（JVM Memory Model）1.1 整体结构JVM运行时数据区分为五个区域： 1234567891011121314151617181920212223┌─────────────────────────────────────┐│              堆（Heap）              ││  ┌─────┬─────┬─────┐              ││  │Eden │ S0  │ S1  │              ││  └─────┴─────┴─────┘              ││           │ 老年代 (Old Gen)         │└─────────────────────────────────────┘┌─────────────────────────────────────┐│          方法区（Metaspace）     ...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/12/day7-mq/" title="【学习打卡】Day 7 — RabbitMQ 与 Kafka 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-12</div><div class="info-item-2">【学习打卡】Day 7 — RabbitMQ 与 Kafka 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 7 — RabbitMQ 与 Kafka 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第7天 | 适合人群：Java后端求职者   一、RabbitMQ 如何保证消息不丢失问题根源消息在到达消费者之前，可能在以下环节丢失：  生产者消息未到达交换机 消息未到达队列 队列中消息丢失 消费者处理消息时丢失  解决方案（三个层面）a. 开启生产者确认机制（Publisher Confirm）  确保生产者的消息能到达队列 失败处理：回调即时重发、记录日志、保存到数据库定时重发  b. 开启持久化功能  交换机持久化 队列持久化 消息持久化（SpringAMQP 消息默认持久，可通过 MessageProperties 指定 DeliveryMode）  c. 开启消费者确认机制  手动确认（manual）：业务代码结束后调用 API 发送 ack 自动确认（auto）：Spring 监测 listener 代码异常，无异常返回 ack，有异常返回 nack 关闭确认（none）：MQ 假定消费者成功处理，投递后立即删   二、消息的重复消费问题如何解决...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/11/day6-redis/" title="【学习打卡】Day 6 — Redis 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-11</div><div class="info-item-2">【学习打卡】Day 6 — Redis 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 6 — Redis 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第6天 | 适合人群：Java后端求职者   一、Redis 使用场景缓存：缓存穿透、击穿、雪崩、双写一致、持久化、数据过期与淘汰策略 分布式锁：setnx、Redisson 实现 其他：计数器、保存 Token、消息队列、延迟队列、集群  二、缓存三大问题及解决方案1. 缓存穿透问题：查询不存在的数据，请求直达数据库。 解决方案：  缓存空值：简单但消耗内存，可能不一致 布隆过滤器：内存占用少，存在误判（一般 &lt; 5%）  2. 缓存击穿问题：热点 key 过期瞬间，大量并发请求压垮数据库。 解决方案：  互斥锁：强一致，性能较差（如 Redis 的 setnx） 逻辑过期：高可用，性能优（不设 TTL，额外字段记录过期时间）  3. 缓存雪崩问题：大量 key 同时过期，或 Redis 宕机。 解决方案：  给不同 key 的 TTL 添加随机值 Redis 集群提高可用性（哨兵、集群模式） 降级限流策略（Nginx、Gateway） 多级缓存（Guava、Caffeine...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/15/day10-arraylist/" title="【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-15</div><div class="info-item-2">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点</div></div><div class="info-2"><div class="info-item-1">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点 作者：初魁 | 学习周期：Java后端面试冲刺第10天 | 适合人群：Java后端求职者   一、ArrayList 底层原理1. 底层数据结构Object[] 数组（动态数组）。 2. add() 扩容机制add(E e) 流程：  判断 size + 1 是否大于当前数组长度 大于 → 触发扩容 grow()，新容量 &#x3D; 旧容量 × 1.5 扩容实际是创建新数组，用 Arrays.copyOf() 复制原数组 把元素放入下标 size 位置，size++  默认初始容量 10，懒加载。 3. Arrays.asList() 的坑Arrays.asList(&quot;a&quot;, &quot;b&quot;, &quot;c&quot;) 返回的不是 java.util.ArrayList，而是 Arrays.ArrayList——一个固定长度的内部类。  set() 修改元素：不会报错，直接修改原数组 remove() 删除元素：抛 UnsupportedOperation...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/blog/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description"></div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">10</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">17</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">1</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E3%80%90%E5%AD%A6%E4%B9%A0%E6%89%93%E5%8D%A1%E3%80%91Day-9-%E2%80%94-Spring-%E6%A1%86%E6%9E%B6%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9"><span class="toc-number">1.</span> <span class="toc-text">【学习打卡】Day 9 — Spring 框架核心知识点</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81Spring-%E6%A1%86%E6%9E%B6"><span class="toc-number">1.1.</span> <span class="toc-text">一、Spring 框架</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%8D%95%E4%BE%8B-Bean-%E7%9A%84%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8%E9%97%AE%E9%A2%98"><span class="toc-number">1.1.1.</span> <span class="toc-text">1. 单例 Bean 的线程安全问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-AOP%EF%BC%88%E9%9D%A2%E5%90%91%E5%88%87%E9%9D%A2%E7%BC%96%E7%A8%8B%EF%BC%89"><span class="toc-number">1.1.2.</span> <span class="toc-text">2. AOP（面向切面编程）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-Spring-%E4%BA%8B%E5%8A%A1%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.1.3.</span> <span class="toc-text">3. Spring 事务实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-Bean-%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="toc-number">1.1.4.</span> <span class="toc-text">4. Bean 的生命周期</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%BE%AA%E7%8E%AF%E4%BE%9D%E8%B5%96%E4%B8%8E%E4%B8%89%E7%BA%A7%E7%BC%93%E5%AD%98"><span class="toc-number">1.1.5.</span> <span class="toc-text">5. 循环依赖与三级缓存</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81SpringMVC-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">1.2.</span> <span class="toc-text">二、SpringMVC 执行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC1%EF%BC%9A%E8%A7%86%E5%9B%BE%E9%98%B6%E6%AE%B5%EF%BC%88JSP%EF%BC%89"><span class="toc-number">1.2.1.</span> <span class="toc-text">版本1：视图阶段（JSP）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%89%88%E6%9C%AC2%EF%BC%9A%E5%89%8D%E5%90%8E%E7%AB%AF%E5%88%86%E7%A6%BB%E9%98%B6%E6%AE%B5%EF%BC%88%E6%8E%A5%E5%8F%A3%E5%BC%80%E5%8F%91%EF%BC%8C%E5%BC%82%E6%AD%A5%E8%AF%B7%E6%B1%82%EF%BC%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">版本2：前后端分离阶段（接口开发，异步请求）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81SpringBoot-%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE%E5%8E%9F%E7%90%86"><span class="toc-number">1.3.</span> <span class="toc-text">三、SpringBoot 自动配置原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81MyBatis"><span class="toc-number">1.4.</span> <span class="toc-text">四、MyBatis</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.1.</span> <span class="toc-text">1. 执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%BB%B6%E8%BF%9F%E5%8A%A0%E8%BD%BD"><span class="toc-number">1.4.2.</span> <span class="toc-text">2. 延迟加载</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E4%B8%80%E7%BA%A7%E7%BC%93%E5%AD%98%E4%B8%8E%E4%BA%8C%E7%BA%A7%E7%BC%93%E5%AD%98"><span class="toc-number">1.4.3.</span> <span class="toc-text">3. 一级缓存与二级缓存</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/17/day12-hashmap/" title="【学习打卡】Day 12 — HashMap 面试必问 9 道题">【学习打卡】Day 12 — HashMap 面试必问 9 道题</a><time datetime="2026-04-17T04:00:00.000Z" title="发表于 2026-04-17 12:00:00">2026-04-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/15/day10-arraylist/" title="【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点">【学习打卡】Day 10 — ArrayList 与 LinkedList 核心知识点</a><time datetime="2026-04-15T04:00:00.000Z" title="发表于 2026-04-15 12:00:00">2026-04-15</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/14/day9-spring/" title="【学习打卡】Day 9 — Spring 框架核心知识点">【学习打卡】Day 9 — Spring 框架核心知识点</a><time datetime="2026-04-14T04:00:00.000Z" title="发表于 2026-04-14 12:00:00">2026-04-14</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/13/day8-mysql/" title="【学习打卡】Day 8 — MySQL 核心知识点">【学习打卡】Day 8 — MySQL 核心知识点</a><time datetime="2026-04-13T04:00:00.000Z" title="发表于 2026-04-13 12:00:00">2026-04-13</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/12/day7-mq/" title="【学习打卡】Day 7 — RabbitMQ 与 Kafka 核心知识点">【学习打卡】Day 7 — RabbitMQ 与 Kafka 核心知识点</a><time datetime="2026-04-12T04:00:00.000Z" title="发表于 2026-04-12 12:00:00">2026-04-12</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.4</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.4"></script><script src="/blog/js/main.js?v=5.5.4"></script><div class="js-pjax"></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
+    if theme.reward.enable && theme.reward.QR_code
+      !=partial('includes/post/reward', {}, {cache: true})
+
+    //- ad
+    if theme.ad && theme.ad.post
+      .ads-wrap!=theme.ad.post
+
+    if theme.post_pagination
+      include includes/pagination.pug
+    if theme.related_post && theme.related_post.enable
+      != related_posts(page,site.posts)
+
+    if page.comments !== false && theme.comments.use
+      - var commentsJsLoad = true
+      !=partial('includes/third-party/comments/index', {}, {cache: true})
