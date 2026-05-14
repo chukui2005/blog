@@ -1,0 +1,1081 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>07 — 集合框架（一）：List与Set | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="核心知识点速览   知识点 要点    集合框架总览 Collection（List&#x2F;Set&#x2F;Queue）和 Map 两大分支   ArrayList 数组实现，扩容1.5倍，随机访问 O(1)，插入删除 O(n)   LinkedList 双向链表，插入删除 O(1)（已知位置），随机访问 O(n)   HashSet 基于 HashMap，无序不重复，允许 null   L">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07 — 集合框架（一）：List与Set">
+<meta property="og:url" content="https://chukui2005.github.io/2025/11/12/java07-collection-list-set/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="核心知识点速览   知识点 要点    集合框架总览 Collection（List&#x2F;Set&#x2F;Queue）和 Map 两大分支   ArrayList 数组实现，扩容1.5倍，随机访问 O(1)，插入删除 O(n)   LinkedList 双向链表，插入删除 O(1)（已知位置），随机访问 O(n)   HashSet 基于 HashMap，无序不重复，允许 null   L">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/butterfly-icon.png">
+<meta property="article:published_time" content="2025-11-12T00:00:00.000Z">
+<meta property="article:modified_time" content="2025-11-12T00:00:00.000Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="Java">
+<meta property="article:tag" content="集合">
+<meta property="article:tag" content="List">
+<meta property="article:tag" content="Set">
+<meta property="article:tag" content="ArrayList">
+<meta property="article:tag" content="LinkedList">
+<meta property="article:tag" content="HashSet">
+<meta property="article:tag" content="TreeSet">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/butterfly-icon.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "07 — 集合框架（一）：List与Set",
+  "url": "https://chukui2005.github.io/2025/11/12/java07-collection-list-set/",
+  "image": "https://chukui2005.github.io/img/butterfly-icon.png",
+  "datePublished": "2025-11-12T00:00:00.000Z",
+  "dateModified": "2025-11-12T00:00:00.000Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2025/11/12/java07-collection-list-set/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '07 — 集合框架（一）：List与Set',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">07 — 集合框架（一）：List与Set</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">07 — 集合框架（一）：List与Set<a class="post-edit-link" href="null_posts/java07-collection-list-set.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-11-12T00:00:00.000Z" title="发表于 2025-11-12 08:00:00">2025-11-12</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-11-12T00:00:00.000Z" title="更新于 2025-11-12 08:00:00">2025-11-12</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/Java%E5%9F%BA%E7%A1%80/">Java基础</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">3.4k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>16分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2025-11-12 08:00:00&quot;}" hidden></div><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>集合框架总览</td>
+<td>Collection（List&#x2F;Set&#x2F;Queue）和 Map 两大分支</td>
+</tr>
+<tr>
+<td>ArrayList</td>
+<td>数组实现，扩容1.5倍，随机访问 O(1)，插入删除 O(n)</td>
+</tr>
+<tr>
+<td>LinkedList</td>
+<td>双向链表，插入删除 O(1)（已知位置），随机访问 O(n)</td>
+</tr>
+<tr>
+<td>HashSet</td>
+<td>基于 HashMap，无序不重复，允许 null</td>
+</tr>
+<tr>
+<td>LinkedHashSet</td>
+<td>双向链表维护插入顺序</td>
+</tr>
+<tr>
+<td>TreeSet</td>
+<td>红黑树，自动排序，不允许 null</td>
+</tr>
+<tr>
+<td>迭代器</td>
+<td>Iterator fail-fast，for-each 本质是迭代器</td>
+</tr>
+<tr>
+<td>Comparable vs Comparator</td>
+<td>自然排序 vs 自定义排序</td>
+</tr>
+</tbody></table>
+<span id="more"></span>
+
+<hr>
+<h2 id="一、集合框架总览"><a href="#一、集合框架总览" class="headerlink" title="一、集合框架总览"></a>一、集合框架总览</h2><p>Java 集合框架主要分为两大接口体系：</p>
+<div class="mermaid-wrap"><pre class="mermaid-src" data-config="{}" hidden>
+    graph TD
+    COL[Collection 接口] --&gt; List[List 有序可重复]
+    COL --&gt; Set[Set 无序不重复]
+    COL --&gt; Queue[Queue 队列]
+    List --&gt; AL[ArrayList]
+    List --&gt; LL[LinkedList]
+    List --&gt; Vec[Vector 旧版]
+    Vec --&gt; STK[Stack]
+    Set --&gt; HS[HashSet]
+    HS --&gt; LHS[LinkedHashSet 有序]
+    Set --&gt; TS[TreeSet 排序]
+    Queue --&gt; LL2[LinkedList]
+    Queue --&gt; PQ[PriorityQueue]
+    Queue --&gt; AD[ArrayDeque]
+    
+    MAP[Map 接口 键值对] --&gt; HM[HashMap]
+    HM --&gt; LHM[LinkedHashMap 有序]
+    MAP --&gt; TM[TreeMap 排序]
+    MAP --&gt; HT[Hashtable 旧版 线程安全]
+  </pre></div>
+
+<hr>
+<h2 id="二、Collection-接口"><a href="#二、Collection-接口" class="headerlink" title="二、Collection 接口"></a>二、Collection 接口</h2><p>Collection 是 List、Set、Queue 的根接口，定义了集合的基本操作：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CollectionBasicDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        Collection&lt;String&gt; coll = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 添加</span></span><br><span class="line">        coll.add(<span class="string">&quot;A&quot;</span>);</span><br><span class="line">        coll.add(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">        coll.add(<span class="string">&quot;C&quot;</span>);</span><br><span class="line">        System.out.println(coll);  <span class="comment">// [A, B, C]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 删除</span></span><br><span class="line">        coll.remove(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">        System.out.println(coll);  <span class="comment">// [A, C]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 判断</span></span><br><span class="line">        System.out.println(coll.contains(<span class="string">&quot;A&quot;</span>));  <span class="comment">// true</span></span><br><span class="line">        System.out.println(coll.isEmpty());       <span class="comment">// false</span></span><br><span class="line">        System.out.println(coll.size());          <span class="comment">// 2</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 批量</span></span><br><span class="line">        Collection&lt;String&gt; other = Arrays.asList(<span class="string">&quot;D&quot;</span>, <span class="string">&quot;E&quot;</span>);</span><br><span class="line">        coll.addAll(other);</span><br><span class="line">        System.out.println(coll);  <span class="comment">// [A, C, D, E]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 转数组</span></span><br><span class="line">        String[] arr = coll.toArray(<span class="keyword">new</span> <span class="title class_">String</span>[<span class="number">0</span>]);</span><br><span class="line">        System.out.println(Arrays.toString(arr));  <span class="comment">// [A, C, D, E]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 清空</span></span><br><span class="line">        coll.clear();</span><br><span class="line">        System.out.println(coll.isEmpty());  <span class="comment">// true</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、List-接口"><a href="#三、List-接口" class="headerlink" title="三、List 接口"></a>三、List 接口</h2><h3 id="3-1-ArrayList（数组实现）"><a href="#3-1-ArrayList（数组实现）" class="headerlink" title="3.1 ArrayList（数组实现）"></a>3.1 ArrayList（数组实现）</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ArrayListDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="comment">// 创建</span></span><br><span class="line">        List&lt;String&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="comment">// 指定初始容量：new ArrayList&lt;&gt;(100)</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 增加</span></span><br><span class="line">        list.add(<span class="string">&quot;A&quot;</span>);</span><br><span class="line">        list.add(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">        list.add(<span class="string">&quot;C&quot;</span>);</span><br><span class="line">        list.add(<span class="number">1</span>, <span class="string">&quot;X&quot;</span>);   <span class="comment">// 在索引1处插入</span></span><br><span class="line">        System.out.println(list);  <span class="comment">// [A, X, B, C]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 删除</span></span><br><span class="line">        list.remove(<span class="string">&quot;X&quot;</span>);    <span class="comment">// 按对象删除</span></span><br><span class="line">        list.remove(<span class="number">0</span>);      <span class="comment">// 按索引删除</span></span><br><span class="line">        System.out.println(list);  <span class="comment">// [B, C]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 修改</span></span><br><span class="line">        list.set(<span class="number">0</span>, <span class="string">&quot;Z&quot;</span>);</span><br><span class="line">        System.out.println(list);  <span class="comment">// [Z, C]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 查询</span></span><br><span class="line">        System.out.println(list.get(<span class="number">0</span>));      <span class="comment">// Z</span></span><br><span class="line">        System.out.println(list.indexOf(<span class="string">&quot;C&quot;</span>)); <span class="comment">// 1</span></span><br><span class="line">        System.out.println(list.contains(<span class="string">&quot;Z&quot;</span>));<span class="comment">// true</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 遍历</span></span><br><span class="line">        <span class="comment">// 方式1：for 循环</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; list.size(); i++) &#123;</span><br><span class="line">            System.out.println(list.get(i));</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 方式2：增强 for</span></span><br><span class="line">        <span class="keyword">for</span> (String s : list) &#123;</span><br><span class="line">            System.out.println(s);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 方式3：forEach (JDK8)</span></span><br><span class="line">        list.forEach(System.out::println);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="ArrayList-扩容机制"><a href="#ArrayList-扩容机制" class="headerlink" title="ArrayList 扩容机制"></a>ArrayList 扩容机制</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ArrayListGrowDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> Exception &#123;</span><br><span class="line">        <span class="comment">// 通过反射查看扩容后的容量</span></span><br><span class="line">        ArrayList&lt;Integer&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();  <span class="comment">// 初始空数组</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 添加第一个元素时，扩容到 DEFAULT_CAPACITY = 10</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">11</span>; i++) &#123;</span><br><span class="line">            list.add(i);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 第11个元素触发扩容：10 * 1.5 = 15</span></span><br><span class="line">        System.out.println(<span class="string">&quot;当前 size: &quot;</span> + list.size());</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 扩容公式：newCapacity = oldCapacity + (oldCapacity &gt;&gt; 1)</span></span><br><span class="line">        <span class="comment">// 右移一位 ≈ 除以2，所以是 1.5 倍</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-LinkedList（双向链表）"><a href="#3-2-LinkedList（双向链表）" class="headerlink" title="3.2 LinkedList（双向链表）"></a>3.2 LinkedList（双向链表）</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">LinkedListDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        LinkedList&lt;String&gt; list = <span class="keyword">new</span> <span class="title class_">LinkedList</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 作为 List 使用</span></span><br><span class="line">        list.add(<span class="string">&quot;A&quot;</span>);</span><br><span class="line">        list.add(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">        list.add(<span class="number">1</span>, <span class="string">&quot;C&quot;</span>);</span><br><span class="line">        System.out.println(list);  <span class="comment">// [A, C, B]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 作为 Queue（队列）使用</span></span><br><span class="line">        list.offer(<span class="string">&quot;D&quot;</span>);           <span class="comment">// 队尾添加</span></span><br><span class="line">        <span class="type">String</span> <span class="variable">first</span> <span class="operator">=</span> list.poll(); <span class="comment">// 队头取出并删除</span></span><br><span class="line">        System.out.println(<span class="string">&quot;poll: &quot;</span> + first);  <span class="comment">// A</span></span><br><span class="line">        System.out.println(list);  <span class="comment">// [C, B, D]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 作为 Deque（双端队列）使用</span></span><br><span class="line">        list.addFirst(<span class="string">&quot;X&quot;</span>);        <span class="comment">// 头部添加</span></span><br><span class="line">        list.addLast(<span class="string">&quot;Y&quot;</span>);         <span class="comment">// 尾部添加</span></span><br><span class="line">        System.out.println(list);  <span class="comment">// [X, C, B, D, Y]</span></span><br><span class="line"></span><br><span class="line">        System.out.println(list.getFirst());  <span class="comment">// X</span></span><br><span class="line">        System.out.println(list.getLast());   <span class="comment">// Y</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 栈操作</span></span><br><span class="line">        LinkedList&lt;String&gt; stack = <span class="keyword">new</span> <span class="title class_">LinkedList</span>&lt;&gt;();</span><br><span class="line">        stack.push(<span class="string">&quot;A&quot;</span>);           <span class="comment">// 入栈（头部）</span></span><br><span class="line">        stack.push(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">        stack.push(<span class="string">&quot;C&quot;</span>);</span><br><span class="line">        System.out.println(stack); <span class="comment">// [C, B, A]</span></span><br><span class="line">        System.out.println(stack.pop());  <span class="comment">// C（出栈）</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-ArrayList-vs-LinkedList-场景选择"><a href="#3-3-ArrayList-vs-LinkedList-场景选择" class="headerlink" title="3.3 ArrayList vs LinkedList 场景选择"></a>3.3 ArrayList vs LinkedList 场景选择</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ListCompareDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">size</span> <span class="operator">=</span> <span class="number">100000</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 1. 尾部添加——ArrayList 更快</span></span><br><span class="line">        List&lt;Integer&gt; arrayList = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="type">long</span> <span class="variable">start</span> <span class="operator">=</span> System.nanoTime();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; size; i++) arrayList.add(i);</span><br><span class="line">        <span class="type">long</span> <span class="variable">end</span> <span class="operator">=</span> System.nanoTime();</span><br><span class="line">        System.out.println(<span class="string">&quot;ArrayList 尾部添加: &quot;</span> + (end - start) / <span class="number">1e6</span> + <span class="string">&quot;ms&quot;</span>);</span><br><span class="line"></span><br><span class="line">        List&lt;Integer&gt; linkedList = <span class="keyword">new</span> <span class="title class_">LinkedList</span>&lt;&gt;();</span><br><span class="line">        start = System.nanoTime();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; size; i++) linkedList.add(i);</span><br><span class="line">        end = System.nanoTime();</span><br><span class="line">        System.out.println(<span class="string">&quot;LinkedList 尾部添加: &quot;</span> + (end - start) / <span class="number">1e6</span> + <span class="string">&quot;ms&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2. 随机访问——ArrayList 快得多</span></span><br><span class="line">        start = System.nanoTime();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; size; i++) arrayList.get(i);</span><br><span class="line">        end = System.nanoTime();</span><br><span class="line">        System.out.println(<span class="string">&quot;ArrayList 随机访问: &quot;</span> + (end - start) / <span class="number">1e6</span> + <span class="string">&quot;ms&quot;</span>);</span><br><span class="line"></span><br><span class="line">        start = System.nanoTime();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; size; i++) linkedList.get(i);</span><br><span class="line">        end = System.nanoTime();</span><br><span class="line">        System.out.println(<span class="string">&quot;LinkedList 随机访问: &quot;</span> + (end - start) / <span class="number">1e6</span> + <span class="string">&quot;ms&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 3. 头部插入——LinkedList 快</span></span><br><span class="line">        arrayList.clear();</span><br><span class="line">        linkedList.clear();</span><br><span class="line">        start = System.nanoTime();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">10000</span>; i++) arrayList.add(<span class="number">0</span>, i);</span><br><span class="line">        end = System.nanoTime();</span><br><span class="line">        System.out.println(<span class="string">&quot;ArrayList 头部插入: &quot;</span> + (end - start) / <span class="number">1e6</span> + <span class="string">&quot;ms&quot;</span>);</span><br><span class="line"></span><br><span class="line">        start = System.nanoTime();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">10000</span>; i++) linkedList.add(<span class="number">0</span>, i);</span><br><span class="line">        end = System.nanoTime();</span><br><span class="line">        System.out.println(<span class="string">&quot;LinkedList 头部插入: &quot;</span> + (end - start) / <span class="number">1e6</span> + <span class="string">&quot;ms&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>选择总结</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>推荐</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>频繁随机访问（按索引 get）</td>
+<td>ArrayList</td>
+</tr>
+<tr>
+<td>频繁尾部添加</td>
+<td>ArrayList</td>
+</tr>
+<tr>
+<td>频繁头部插入&#x2F;删除</td>
+<td>LinkedList</td>
+</tr>
+<tr>
+<td>频繁中间插入&#x2F;删除</td>
+<td>LinkedList</td>
+</tr>
+<tr>
+<td>内存占用</td>
+<td>ArrayList 更小</td>
+</tr>
+<tr>
+<td>作为队列&#x2F;栈使用</td>
+<td>LinkedList</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="四、Set-接口"><a href="#四、Set-接口" class="headerlink" title="四、Set 接口"></a>四、Set 接口</h2><h3 id="4-1-HashSet（无序不重复）"><a href="#4-1-HashSet（无序不重复）" class="headerlink" title="4.1 HashSet（无序不重复）"></a>4.1 HashSet（无序不重复）</h3><p>基于 HashMap，底层存储的 key 就是 Set 的元素，value 是一个固定的 Object。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">HashSetDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        Set&lt;String&gt; set = <span class="keyword">new</span> <span class="title class_">HashSet</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 添加（重复元素不会添加，返回 false）</span></span><br><span class="line">        set.add(<span class="string">&quot;张三&quot;</span>);</span><br><span class="line">        set.add(<span class="string">&quot;李四&quot;</span>);</span><br><span class="line">        set.add(<span class="string">&quot;王五&quot;</span>);</span><br><span class="line">        <span class="type">boolean</span> <span class="variable">added</span> <span class="operator">=</span> set.add(<span class="string">&quot;张三&quot;</span>);  <span class="comment">// 已存在，返回 false</span></span><br><span class="line">        System.out.println(<span class="string">&quot;添加重复: &quot;</span> + added);  <span class="comment">// false</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 无序</span></span><br><span class="line">        System.out.println(set);  <span class="comment">// 输出顺序不确定</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 判断</span></span><br><span class="line">        System.out.println(set.contains(<span class="string">&quot;张三&quot;</span>));  <span class="comment">// true</span></span><br><span class="line">        System.out.println(set.size());            <span class="comment">// 3</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 删除</span></span><br><span class="line">        set.remove(<span class="string">&quot;李四&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 允许一个 null</span></span><br><span class="line">        set.add(<span class="literal">null</span>);</span><br><span class="line">        set.add(<span class="literal">null</span>);  <span class="comment">// 不会重复添加</span></span><br><span class="line">        System.out.println(set);  <span class="comment">// [null, 张三, 王五]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 遍历</span></span><br><span class="line">        <span class="keyword">for</span> (String name : set) &#123;</span><br><span class="line">            System.out.println(name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-LinkedHashSet（保持插入顺序）"><a href="#4-2-LinkedHashSet（保持插入顺序）" class="headerlink" title="4.2 LinkedHashSet（保持插入顺序）"></a>4.2 LinkedHashSet（保持插入顺序）</h3><p>在 HashSet 的基础上，用双向链表维护插入顺序：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">LinkedHashSetDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        Set&lt;String&gt; set = <span class="keyword">new</span> <span class="title class_">LinkedHashSet</span>&lt;&gt;();</span><br><span class="line">        set.add(<span class="string">&quot;C&quot;</span>);</span><br><span class="line">        set.add(<span class="string">&quot;A&quot;</span>);</span><br><span class="line">        set.add(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">        set.add(<span class="string">&quot;D&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 保持插入顺序</span></span><br><span class="line">        System.out.println(set);  <span class="comment">// [C, A, B, D]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 与 HashSet 对比</span></span><br><span class="line">        Set&lt;String&gt; hashSet = <span class="keyword">new</span> <span class="title class_">HashSet</span>&lt;&gt;(set);</span><br><span class="line">        System.out.println(hashSet);  <span class="comment">// 无序，如 [A, B, C, D]</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-3-TreeSet（可排序）"><a href="#4-3-TreeSet（可排序）" class="headerlink" title="4.3 TreeSet（可排序）"></a>4.3 TreeSet（可排序）</h3><p>基于红黑树（Red-Black Tree），元素自动排序：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">TreeSetDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="comment">// 自然排序（元素必须实现 Comparable）</span></span><br><span class="line">        Set&lt;Integer&gt; numbers = <span class="keyword">new</span> <span class="title class_">TreeSet</span>&lt;&gt;();</span><br><span class="line">        numbers.add(<span class="number">5</span>);</span><br><span class="line">        numbers.add(<span class="number">1</span>);</span><br><span class="line">        numbers.add(<span class="number">9</span>);</span><br><span class="line">        numbers.add(<span class="number">3</span>);</span><br><span class="line">        System.out.println(numbers);  <span class="comment">// [1, 3, 5, 9]（自然升序）</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 字符串按字典序</span></span><br><span class="line">        Set&lt;String&gt; words = <span class="keyword">new</span> <span class="title class_">TreeSet</span>&lt;&gt;();</span><br><span class="line">        words.add(<span class="string">&quot;banana&quot;</span>);</span><br><span class="line">        words.add(<span class="string">&quot;apple&quot;</span>);</span><br><span class="line">        words.add(<span class="string">&quot;cherry&quot;</span>);</span><br><span class="line">        System.out.println(words);  <span class="comment">// [apple, banana, cherry]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 自定义排序（Comparator）</span></span><br><span class="line">        Set&lt;String&gt; byLength = <span class="keyword">new</span> <span class="title class_">TreeSet</span>&lt;&gt;(</span><br><span class="line">                (s1, s2) -&gt; Integer.compare(s1.length(), s2.length())</span><br><span class="line">        );</span><br><span class="line">        byLength.add(<span class="string">&quot;banana&quot;</span>);</span><br><span class="line">        byLength.add(<span class="string">&quot;apple&quot;</span>);</span><br><span class="line">        byLength.add(<span class="string">&quot;pear&quot;</span>);</span><br><span class="line">        byLength.add(<span class="string">&quot;cherry&quot;</span>);</span><br><span class="line">        System.out.println(byLength);  <span class="comment">// [pear, apple, banana, cherry]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// TreeSet 不能存 null</span></span><br><span class="line">        <span class="comment">// numbers.add(null);  // NullPointerException！</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 区间操作</span></span><br><span class="line">        TreeSet&lt;Integer&gt; ts = <span class="keyword">new</span> <span class="title class_">TreeSet</span>&lt;&gt;(Arrays.asList(<span class="number">1</span>, <span class="number">3</span>, <span class="number">5</span>, <span class="number">7</span>, <span class="number">9</span>));</span><br><span class="line">        System.out.println(ts.first());      <span class="comment">// 1</span></span><br><span class="line">        System.out.println(ts.last());       <span class="comment">// 9</span></span><br><span class="line">        System.out.println(ts.lower(<span class="number">5</span>));     <span class="comment">// 3（小于5的最大元素）</span></span><br><span class="line">        System.out.println(ts.higher(<span class="number">5</span>));    <span class="comment">// 7（大于5的最小元素）</span></span><br><span class="line">        System.out.println(ts.floor(<span class="number">4</span>));     <span class="comment">// 3（小于等于4的最大元素）</span></span><br><span class="line">        System.out.println(ts.ceiling(<span class="number">6</span>));   <span class="comment">// 7（大于等于6的最小元素）</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 子集</span></span><br><span class="line">        System.out.println(ts.subSet(<span class="number">3</span>, <span class="number">8</span>));  <span class="comment">// [3, 5, 7]（[3, 8)）</span></span><br><span class="line">        System.out.println(ts.headSet(<span class="number">5</span>));    <span class="comment">// [1, 3]（&lt;5）</span></span><br><span class="line">        System.out.println(ts.tailSet(<span class="number">5</span>));    <span class="comment">// [5, 7, 9]（&gt;=5）</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="五、迭代器"><a href="#五、迭代器" class="headerlink" title="五、迭代器"></a>五、迭代器</h2><h3 id="5-1-Iterator-的使用"><a href="#5-1-Iterator-的使用" class="headerlink" title="5.1 Iterator 的使用"></a>5.1 Iterator 的使用</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">IteratorDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        List&lt;String&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(Arrays.asList(<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>, <span class="string">&quot;D&quot;</span>));</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 基本迭代</span></span><br><span class="line">        Iterator&lt;String&gt; it = list.iterator();</span><br><span class="line">        <span class="keyword">while</span> (it.hasNext()) &#123;</span><br><span class="line">            <span class="type">String</span> <span class="variable">s</span> <span class="operator">=</span> it.next();</span><br><span class="line">            System.out.println(s);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 边遍历边删除（这是安全的删除方式）</span></span><br><span class="line">        Iterator&lt;String&gt; it2 = list.iterator();</span><br><span class="line">        <span class="keyword">while</span> (it2.hasNext()) &#123;</span><br><span class="line">            <span class="type">String</span> <span class="variable">s</span> <span class="operator">=</span> it2.next();</span><br><span class="line">            <span class="keyword">if</span> (<span class="string">&quot;B&quot;</span>.equals(s)) &#123;</span><br><span class="line">                it2.remove();  <span class="comment">// 使用迭代器的 remove，不是集合的 remove</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(list);  <span class="comment">// [A, C, D]</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-for-each-本质"><a href="#5-2-for-each-本质" class="headerlink" title="5.2 for-each 本质"></a>5.2 for-each 本质</h3><p>for-each 本质是语法糖，编译后会被转换为迭代器：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ForEachInternals</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        List&lt;String&gt; list = Arrays.asList(<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 这段代码：</span></span><br><span class="line">        <span class="keyword">for</span> (String s : list) &#123;</span><br><span class="line">            System.out.println(s);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 编译后等价于：</span></span><br><span class="line">        Iterator&lt;String&gt; it = list.iterator();</span><br><span class="line">        <span class="keyword">while</span> (it.hasNext()) &#123;</span><br><span class="line">            <span class="type">String</span> <span class="variable">s</span> <span class="operator">=</span> it.next();</span><br><span class="line">            System.out.println(s);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-3-fail-fast-机制"><a href="#5-3-fail-fast-机制" class="headerlink" title="5.3 fail-fast 机制"></a>5.3 fail-fast 机制</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">FailFastDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        List&lt;String&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(Arrays.asList(<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>, <span class="string">&quot;D&quot;</span>));</span><br><span class="line"></span><br><span class="line">        <span class="comment">// ConurrentModificationException！</span></span><br><span class="line">        <span class="comment">// 迭代过程中用集合的 remove 修改结构</span></span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="keyword">for</span> (String s : list) &#123;</span><br><span class="line">                <span class="keyword">if</span> (<span class="string">&quot;B&quot;</span>.equals(s)) &#123;</span><br><span class="line">                    list.remove(s);  <span class="comment">// 抛出 ConcurrentModificationException</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (ConcurrentModificationException e) &#123;</span><br><span class="line">            System.out.println(<span class="string">&quot;并发修改异常！&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 正确的删除方式</span></span><br><span class="line">        Iterator&lt;String&gt; it = list.iterator();</span><br><span class="line">        <span class="keyword">while</span> (it.hasNext()) &#123;</span><br><span class="line">            <span class="type">String</span> <span class="variable">s</span> <span class="operator">=</span> it.next();</span><br><span class="line">            <span class="keyword">if</span> (<span class="string">&quot;C&quot;</span>.equals(s)) &#123;</span><br><span class="line">                it.remove();  <span class="comment">// 用迭代器的 remove</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        System.out.println(list);  <span class="comment">// [A, B, D]</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>原理</strong>：集合内部维护一个 <code>modCount</code>（修改计数），迭代器创建时保存该值。每次集合结构变化时 modCount++，迭代器每次操作时检查两个值是否一致。</p>
+<hr>
+<h2 id="六、Comparable-vs-Comparator"><a href="#六、Comparable-vs-Comparator" class="headerlink" title="六、Comparable vs Comparator"></a>六、Comparable vs Comparator</h2><h3 id="6-1-Comparable（自然排序）"><a href="#6-1-Comparable（自然排序）" class="headerlink" title="6.1 Comparable（自然排序）"></a>6.1 Comparable（自然排序）</h3><p>实现了 <code>Comparable</code> 接口的类，可以用 <code>Collections.sort()</code> 或 <code>TreeSet</code> 自动排序：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Student</span> <span class="keyword">implements</span> <span class="title class_">Comparable</span>&lt;Student&gt; &#123;</span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">int</span> age;</span><br><span class="line">    <span class="keyword">private</span> <span class="type">double</span> score;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">Student</span><span class="params">(String name, <span class="type">int</span> age, <span class="type">double</span> score)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.name = name;</span><br><span class="line">        <span class="built_in">this</span>.age = age;</span><br><span class="line">        <span class="built_in">this</span>.score = score;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 自然排序规则：先按成绩降序，成绩相同按年龄升序</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">compareTo</span><span class="params">(Student other)</span> &#123;</span><br><span class="line">        <span class="comment">// 成绩降序</span></span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">this</span>.score != other.score) &#123;</span><br><span class="line">            <span class="keyword">return</span> Double.compare(other.score, <span class="built_in">this</span>.score);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 年龄升序</span></span><br><span class="line">        <span class="keyword">return</span> Integer.compare(<span class="built_in">this</span>.age, other.age);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">toString</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;Student&#123;name=&#x27;&quot;</span> + name + <span class="string">&quot;&#x27;, age=&quot;</span> + age + <span class="string">&quot;, score=&quot;</span> + score + <span class="string">&quot;&#125;&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        List&lt;Student&gt; students = Arrays.asList(</span><br><span class="line">                <span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;张三&quot;</span>, <span class="number">22</span>, <span class="number">90.0</span>),</span><br><span class="line">                <span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;李四&quot;</span>, <span class="number">20</span>, <span class="number">85.0</span>),</span><br><span class="line">                <span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;王五&quot;</span>, <span class="number">21</span>, <span class="number">90.0</span>),</span><br><span class="line">                <span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;赵六&quot;</span>, <span class="number">23</span>, <span class="number">95.0</span>)</span><br><span class="line">        );</span><br><span class="line"></span><br><span class="line">        Collections.sort(students);</span><br><span class="line">        students.forEach(System.out::println);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>输出</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Student&#123;name=&#x27;赵六&#x27;, age=23, score=95.0&#125;</span><br><span class="line">Student&#123;name=&#x27;张三&#x27;, age=21, score=90.0&#125;</span><br><span class="line">Student&#123;name=&#x27;王五&#x27;, age=22, score=90.0&#125;</span><br><span class="line">Student&#123;name=&#x27;李四&#x27;, age=20, score=85.0&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-2-Comparator（自定义排序）"><a href="#6-2-Comparator（自定义排序）" class="headerlink" title="6.2 Comparator（自定义排序）"></a>6.2 Comparator（自定义排序）</h3><p>当无法修改源码（如 String、Integer），或需要多种排序规则时使用：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> java.util.*;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">ComparatorDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        List&lt;String&gt; names = Arrays.asList(<span class="string">&quot;Charlie&quot;</span>, <span class="string">&quot;Alice&quot;</span>, <span class="string">&quot;Bob&quot;</span>, <span class="string">&quot;David&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// JDK8 前：匿名内部类</span></span><br><span class="line">        Collections.sort(names, <span class="keyword">new</span> <span class="title class_">Comparator</span>&lt;String&gt;() &#123;</span><br><span class="line">            <span class="meta">@Override</span></span><br><span class="line">            <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">compare</span><span class="params">(String s1, String s2)</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> s1.length() - s2.length();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        System.out.println(names);  <span class="comment">// [Bob, Alice, Charlie, David]（按长度）</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// JDK8：Lambda</span></span><br><span class="line">        Collections.sort(names, (s1, s2) -&gt; s1.length() - s2.length());</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 更简洁：Comparator 工具方法</span></span><br><span class="line">        names.sort(Comparator.comparingInt(String::length));</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 多级排序：先按长度，再按字母序</span></span><br><span class="line">        names.sort(Comparator.comparingInt(String::length)</span><br><span class="line">                .thenComparing(Comparator.naturalOrder()));</span><br><span class="line">        System.out.println(names);  <span class="comment">// [Bob, Alice, David, Charlie]</span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 逆序</span></span><br><span class="line">        names.sort(Comparator.reverseOrder());</span><br><span class="line">        System.out.println(names);  <span class="comment">// [Charlie, David, Bob, Alice]</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-3-对比总结"><a href="#6-3-对比总结" class="headerlink" title="6.3 对比总结"></a>6.3 对比总结</h3><table>
+<thead>
+<tr>
+<th>对比</th>
+<th>Comparable</th>
+<th>Comparator</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>包路径</td>
+<td>java.lang</td>
+<td>java.util</td>
+</tr>
+<tr>
+<td>方法</td>
+<td>compareTo(T o)</td>
+<td>compare(T o1, T o2)</td>
+</tr>
+<tr>
+<td>含义</td>
+<td>自然排序</td>
+<td>自定义排序</td>
+</tr>
+<tr>
+<td>修改源码</td>
+<td>需要</td>
+<td>不需要</td>
+</tr>
+<tr>
+<td>排序数</td>
+<td>只能一种</td>
+<td>可以多种</td>
+</tr>
+<tr>
+<td>常见使用</td>
+<td>TreeSet、Collections.sort()</td>
+<td>临时排序需求</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="常见易错点"><a href="#常见易错点" class="headerlink" title="常见易错点"></a>常见易错点</h2><ol>
+<li><strong>迭代时不能用集合的 remove</strong>：必须用迭代器的 remove，否则 ConcurrentModificationException</li>
+<li><strong>TreeSet&#x2F;HashSet 的 hashCode 和 equals 要求一致</strong>：否则元素去重逻辑异常</li>
+<li><strong>TreeSet 不能存 null</strong>：红黑树比较时会 NPE</li>
+<li><strong>ArrayList 的 subList 返回的是视图</strong>：对 subList 的修改会反映到原列表</li>
+<li><strong>Set 不保证顺序</strong>（HashSet）或保证插入顺序（LinkedHashSet）或排序（TreeSet）</li>
+</ol>
+<hr>
+<h2 id="练习题"><a href="#练习题" class="headerlink" title="练习题"></a>练习题</h2><h3 id="题目1"><a href="#题目1" class="headerlink" title="题目1"></a>题目1</h3><p>以下代码的输出是什么？</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">List&lt;String&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">list.add(<span class="string">&quot;A&quot;</span>);</span><br><span class="line">list.add(<span class="string">&quot;B&quot;</span>);</span><br><span class="line">list.add(<span class="string">&quot;C&quot;</span>);</span><br><span class="line"><span class="keyword">for</span> (String s : list) &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="string">&quot;B&quot;</span>.equals(s)) &#123;</span><br><span class="line">        list.remove(s);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">System.out.println(list);</span><br></pre></td></tr></table></figure>
+
+<details>
+<summary>点击查看答案</summary>
+
+<p>抛出 <code>ConcurrentModificationException</code>。在 for-each 中直接调用 list.remove() 会触发 fail-fast 机制。</p>
+</details>
+
+<h3 id="题目2"><a href="#题目2" class="headerlink" title="题目2"></a>题目2</h3><p>使用 TreeSet 对学生按成绩降序排列，成绩相同按姓名排序：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Student</span> &#123;</span><br><span class="line">    String name;</span><br><span class="line">    <span class="type">double</span> score;</span><br><span class="line">    <span class="comment">// 补全代码</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<details>
+<summary>点击查看答案</summary>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Student</span> <span class="keyword">implements</span> <span class="title class_">Comparable</span>&lt;Student&gt; &#123;</span><br><span class="line">    String name;</span><br><span class="line">    <span class="type">double</span> score;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">Student</span><span class="params">(String name, <span class="type">double</span> score)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.name = name;</span><br><span class="line">        <span class="built_in">this</span>.score = score;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">compareTo</span><span class="params">(Student o)</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">this</span>.score != o.score) &#123;</span><br><span class="line">            <span class="keyword">return</span> Double.compare(o.score, <span class="built_in">this</span>.score); <span class="comment">// 降序</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">this</span>.name.compareTo(o.name); <span class="comment">// 升序</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">toString</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> name + <span class="string">&quot;:&quot;</span> + score;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        Set&lt;Student&gt; set = <span class="keyword">new</span> <span class="title class_">TreeSet</span>&lt;&gt;();</span><br><span class="line">        set.add(<span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;张三&quot;</span>, <span class="number">90</span>));</span><br><span class="line">        set.add(<span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;李四&quot;</span>, <span class="number">85</span>));</span><br><span class="line">        set.add(<span class="keyword">new</span> <span class="title class_">Student</span>(<span class="string">&quot;王五&quot;</span>, <span class="number">90</span>));</span><br><span class="line">        System.out.println(set);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+</details>
+
+<h3 id="题目3"><a href="#题目3" class="headerlink" title="题目3"></a>题目3</h3><p>分析 ArrayList 和 LinkedList 在以下操作上的性能差异，并给出推荐</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">操作1：在列表尾部添加 100 万个元素</span><br><span class="line">操作2：在列表头部添加 1 万个元素</span><br><span class="line">操作3：按索引随机访问 10 万次</span><br><span class="line">操作4：删除中间位置的 1 万个元素</span><br></pre></td></tr></table></figure>
+
+<details>
+<summary>点击查看答案</summary>
+
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>ArrayList</th>
+<th>LinkedList</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>尾部添加</td>
+<td>快（O(1) 摊销）</td>
+<td>快（O(1)）</td>
+</tr>
+<tr>
+<td>头部添加</td>
+<td>慢（O(n)，大量元素后移）</td>
+<td>快（O(1)）</td>
+</tr>
+<tr>
+<td>随机访问</td>
+<td>极快（O(1)）</td>
+<td>慢（O(n)）</td>
+</tr>
+<tr>
+<td>中间删除</td>
+<td>慢（O(n)，元素前移）</td>
+<td>慢（O(n)，查找耗时）</td>
+</tr>
+</tbody></table>
+<p>推荐：</p>
+<ul>
+<li>大部分场景选 ArrayList</li>
+<li>频繁头部操作或用队列&#x2F;栈时选 LinkedList</details></li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2025/11/12/java07-collection-list-set/">https://chukui2005.github.io/2025/11/12/java07-collection-list-set/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Java/">Java</a><a class="post-meta__tags" href="/blog/tags/%E9%9B%86%E5%90%88/">集合</a><a class="post-meta__tags" href="/blog/tags/List/">List</a><a class="post-meta__tags" href="/blog/tags/Set/">Set</a><a class="post-meta__tags" href="/blog/tags/ArrayList/">ArrayList</a><a class="post-meta__tags" href="/blog/tags/LinkedList/">LinkedList</a><a class="post-meta__tags" href="/blog/tags/HashSet/">HashSet</a><a class="post-meta__tags" href="/blog/tags/TreeSet/">TreeSet</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/butterfly-icon.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2025/11/19/java08-collection-map/" title="08 — 集合框架（二）：Map与工具类"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">08 — 集合框架（二）：Map与工具类</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    HashMap 数组+链表+红黑树，扰动函数，扩容2倍，负载因子0.75   LinkedHashMap 双向链表维护顺序，支持 LRU 缓存   TreeMap 红黑树实现，键自动排序   Hashtable vs HashMap vs ConcurrentHashMap 线程安全策略和性能对比   Collections 同步包装、不可变集合、排序、二分查找   Queue&#x2F;Deque LinkedList、PriorityQueue、ArrayDeque 的适用场景      一、Map 接口体系     graph TD     MAP[Map 接口] --&gt; HM[HashMap 最常用 允许null 无序]     HM --&gt; LHM[LinkedHashMap 保持插入&#x2F;访问顺序]     MAP --&gt; TM[TreeMap 自动排序]     MAP --&gt; HT[Hashtable 旧版 线程安全 不允许null]     MAP --&gt; CHM[ConcurrentH...</div></div></div></a><a class="pagination-related" href="/blog/2025/11/05/java06-common-classes/" title="06 — 常用类库"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">06 — 常用类库</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    String 不可变、字符串常量池、intern()、StringBuilder&#x2F;StringBuffer   包装类 自动装箱&#x2F;拆箱、Integer 缓存池（-128~127）、parseXxx&#x2F;valueOf   Math 类 数学运算工具，所有方法都是静态的   Arrays 工具类 sort&#x2F;binarySearch&#x2F;copyOf&#x2F;toString&#x2F;asList   日期时间 API java.time 包（JDK8）、LocalDate&#x2F;LocalDateTime、DateTimeFormatter      一、String 类1.1 不可变性String 是 不可变对象（Immutable）。对 String 的任何修改都会创建新对象。 12345678910111213public class ImmutableDemo &#123;    public static void main(String[] args) &#123;        ...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2025/11/19/java08-collection-map/" title="08 — 集合框架（二）：Map与工具类"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-11-19</div><div class="info-item-2">08 — 集合框架（二）：Map与工具类</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    HashMap 数组+链表+红黑树，扰动函数，扩容2倍，负载因子0.75   LinkedHashMap 双向链表维护顺序，支持 LRU 缓存   TreeMap 红黑树实现，键自动排序   Hashtable vs HashMap vs ConcurrentHashMap 线程安全策略和性能对比   Collections 同步包装、不可变集合、排序、二分查找   Queue&#x2F;Deque LinkedList、PriorityQueue、ArrayDeque 的适用场景      一、Map 接口体系     graph TD     MAP[Map 接口] --&gt; HM[HashMap 最常用 允许null 无序]     HM --&gt; LHM[LinkedHashMap 保持插入&#x2F;访问顺序]     MAP --&gt; TM[TreeMap 自动排序]     MAP --&gt; HT[Hashtable 旧版 线程安全 不允许null]     MAP --&gt; CHM[ConcurrentH...</div></div></div></a><a class="pagination-related" href="/blog/2025/10/08/java02-oop1/" title="02 — 面向对象（上）：类与对象、封装、构造器"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-08</div><div class="info-item-2">02 — 面向对象（上）：类与对象、封装、构造器</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    类与对象 类是模板，对象是实例；堆内存存储对象，栈内存存储引用   成员变量 vs 局部变量 成员变量在堆中、有默认值；局部变量在栈中、必须初始化   封装 private 隐藏细节，public getter&#x2F;setter 提供访问入口   构造器 与类名同名无返回值；默认构造器在未定义任何构造器时自动提供   this 关键字 指向当前对象，解决命名冲突，支持构造器链 this()   static 关键字 类级别共享，静态变量&#x2F;方法&#x2F;代码块，不能访问非静态成员   final 关键字 修饰变量为常量、方法不可重写、类不可继承      一、类与对象的概念1.1 什么是类，什么是对象类（Class） 是对一类事物的抽象描述，包含属性和行为。对象（Object） 是类的具体实例。 打个比方：类就像一张建筑设计图，对象就是按照这张图建造出来的房子。一张图纸可以建造出无数栋房子，每个房子的门牌号、装修风格可能不同，但它们的基本结构都来自同一张图纸。 12345678910111213141516// 定义一个类p...</div></div></div></a><a class="pagination-related" href="/blog/2025/10/01/java01-basics/" title="01 — Java开发环境与基础语法"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-01</div><div class="info-item-2">01 — Java开发环境与基础语法</div></div><div class="info-2"><div class="info-item-1"> 一、Java是什么Java是一种面向对象的编程语言，由Sun公司（现属Oracle）于1995年发布。核心特点是 一次编写，到处运行——同一份代码可以在Windows、Linux、macOS等不同操作系统上运行，不需要修改。 这个跨平台能力靠的是 JVM（Java虚拟机）：编译后的Java代码不直接交给操作系统，而是交给JVM去解释执行。每个平台有对应版本的JVM，代码不用改。  二、搭建开发环境JDK &#x2F; JRE &#x2F; JVM 三者的关系     graph TD     JDK[JDK 开发工具包] --&gt; JRE[JRE 运行时环境]     JDK --&gt; JAVAC[编译器 javac]     JDK --&gt; JAR[打包工具 jar]     JDK --&gt; JDB[调试器 jdb &#x2F; jstack]     JRE --&gt; JVM[JVM 虚拟机]     JRE --&gt; LIB[核心类库 rt.jar]      JVM：Java虚拟机，负责把字节码翻译成机器码执行。不同操作系统有不同版本的JVM...</div></div></div></a><a class="pagination-related" href="/blog/2025/10/22/java04-oop3/" title="04 — 面向对象（下）：接口、内部类、枚举、注解"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-22</div><div class="info-item-2">04 — 面向对象（下）：接口、内部类、枚举、注解</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    接口 interface 关键字，多实现，JDK8 新增 default&#x2F;static 方法   抽象类 vs 接口 单继承 vs 多实现，有状态 vs 无状态，is-a vs can-do   内部类 成员&#x2F;静态&#x2F;局部&#x2F;匿名四种内部类，编译后会生成独立 .class 文件   枚举 enum 关键字，可以拥有属性和方法，switch 天然支持   注解 @Override&#x2F;@Deprecated&#x2F;@SuppressWarnings，元注解和自定义注解      一、接口（Interface）1.1 接口的基本概念接口是一种完全抽象的”规范”，它只规定类应该做什么，而不关心怎么做。JDK8 之前接口中只能有抽象方法和常量。 12345678910111213141516171819202122232425262728293031323334// 定义一个接口public interface Flyable &#123;    // 常量（默认 public static final...</div></div></div></a><a class="pagination-related" href="/blog/2025/12/10/java11-multithread/" title="11 — 多线程基础"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-12-10</div><div class="info-item-2">11 — 多线程基础</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    线程创建 4 种方式 Thread&#x2F;Runnable&#x2F;Callable&#x2F;线程池   生命周期 NEW → RUNNABLE → BLOCKED&#x2F;WAITING&#x2F;TIMED_WAITING → TERMINATED   synchronized 代码块（锁对象）&#x2F; 方法（锁 this）&#x2F; 静态方法（锁 Class）   volatile 保证可见性和禁止指令重排，不保证原子性   wait&#x2F;notify 必须在 synchronized 块中调用，线程间协作   ThreadLocal 线程本地变量，注意内存泄漏（remove）   Lock ReentrantLock，lockInterruptibly，公平&#x2F;非公平   线程池 ThreadPoolExecutor 参数详解，4种拒绝策略，Executors 的坑      一、线程创建 4 种方式1.1 继承 Thread 类12345678910111213141516public class M...</div></div></div></a><a class="pagination-related" href="/blog/2025/10/29/java05-exception/" title="05 — 异常处理机制"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-29</div><div class="info-item-2">05 — 异常处理机制</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    异常体系 Throwable 为根，Error（不可处理）和 Exception（可处理）两大分支   checked vs unchecked checked 必须捕获或声明，unchecked 可选处理   try-catch-finally finally 无论如何都执行（除非 System.exit）   try-with-resources 自动关闭资源，JDK7 开始支持   throws 和 throw throws 声明异常，throw 抛出异常   自定义异常 继承 Exception（checked）或 RuntimeException（unchecked）   异常链 cause 机制，保留原始异常信息      一、异常体系Java 中的异常是一个完整的类层次结构，以 Throwable 为根：      graph TD     T[Throwable] --&gt; ERR[Error 不可恢复]     T --&gt; EXP[Exception 可处理]     ERR --&gt; OOM[OutOfMe...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/blog/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">14</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">63</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">1</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E9%9B%86%E5%90%88%E6%A1%86%E6%9E%B6%E6%80%BB%E8%A7%88"><span class="toc-number">2.</span> <span class="toc-text">一、集合框架总览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Collection-%E6%8E%A5%E5%8F%A3"><span class="toc-number">3.</span> <span class="toc-text">二、Collection 接口</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81List-%E6%8E%A5%E5%8F%A3"><span class="toc-number">4.</span> <span class="toc-text">三、List 接口</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-ArrayList%EF%BC%88%E6%95%B0%E7%BB%84%E5%AE%9E%E7%8E%B0%EF%BC%89"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 ArrayList（数组实现）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ArrayList-%E6%89%A9%E5%AE%B9%E6%9C%BA%E5%88%B6"><span class="toc-number">4.1.1.</span> <span class="toc-text">ArrayList 扩容机制</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-LinkedList%EF%BC%88%E5%8F%8C%E5%90%91%E9%93%BE%E8%A1%A8%EF%BC%89"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 LinkedList（双向链表）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-ArrayList-vs-LinkedList-%E5%9C%BA%E6%99%AF%E9%80%89%E6%8B%A9"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 ArrayList vs LinkedList 场景选择</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81Set-%E6%8E%A5%E5%8F%A3"><span class="toc-number">5.</span> <span class="toc-text">四、Set 接口</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-HashSet%EF%BC%88%E6%97%A0%E5%BA%8F%E4%B8%8D%E9%87%8D%E5%A4%8D%EF%BC%89"><span class="toc-number">5.1.</span> <span class="toc-text">4.1 HashSet（无序不重复）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-LinkedHashSet%EF%BC%88%E4%BF%9D%E6%8C%81%E6%8F%92%E5%85%A5%E9%A1%BA%E5%BA%8F%EF%BC%89"><span class="toc-number">5.2.</span> <span class="toc-text">4.2 LinkedHashSet（保持插入顺序）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-TreeSet%EF%BC%88%E5%8F%AF%E6%8E%92%E5%BA%8F%EF%BC%89"><span class="toc-number">5.3.</span> <span class="toc-text">4.3 TreeSet（可排序）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E8%BF%AD%E4%BB%A3%E5%99%A8"><span class="toc-number">6.</span> <span class="toc-text">五、迭代器</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-Iterator-%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.1.</span> <span class="toc-text">5.1 Iterator 的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-for-each-%E6%9C%AC%E8%B4%A8"><span class="toc-number">6.2.</span> <span class="toc-text">5.2 for-each 本质</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-fail-fast-%E6%9C%BA%E5%88%B6"><span class="toc-number">6.3.</span> <span class="toc-text">5.3 fail-fast 机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81Comparable-vs-Comparator"><span class="toc-number">7.</span> <span class="toc-text">六、Comparable vs Comparator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-Comparable%EF%BC%88%E8%87%AA%E7%84%B6%E6%8E%92%E5%BA%8F%EF%BC%89"><span class="toc-number">7.1.</span> <span class="toc-text">6.1 Comparable（自然排序）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-Comparator%EF%BC%88%E8%87%AA%E5%AE%9A%E4%B9%89%E6%8E%92%E5%BA%8F%EF%BC%89"><span class="toc-number">7.2.</span> <span class="toc-text">6.2 Comparator（自定义排序）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-3-%E5%AF%B9%E6%AF%94%E6%80%BB%E7%BB%93"><span class="toc-number">7.3.</span> <span class="toc-text">6.3 对比总结</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%81%E6%98%93%E9%94%99%E7%82%B9"><span class="toc-number">8.</span> <span class="toc-text">常见易错点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%83%E4%B9%A0%E9%A2%98"><span class="toc-number">9.</span> <span class="toc-text">练习题</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%98%E7%9B%AE1"><span class="toc-number">9.1.</span> <span class="toc-text">题目1</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%98%E7%9B%AE2"><span class="toc-number">9.2.</span> <span class="toc-text">题目2</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%A2%98%E7%9B%AE3"><span class="toc-number">9.3.</span> <span class="toc-text">题目3</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2025/12/31/java14-lambda-stream/" title="14 — Lambda表达式与Stream API">14 — Lambda表达式与Stream API</a><time datetime="2025-12-31T00:00:00.000Z" title="发表于 2025-12-31 08:00:00">2025-12-31</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2025/12/24/java13-jdbc/" title="13 — JDBC与数据库操作">13 — JDBC与数据库操作</a><time datetime="2025-12-24T00:00:00.000Z" title="发表于 2025-12-24 08:00:00">2025-12-24</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2025/12/17/java12-network/" title="12 — 网络编程">12 — 网络编程</a><time datetime="2025-12-17T00:00:00.000Z" title="发表于 2025-12-17 08:00:00">2025-12-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2025/12/10/java11-multithread/" title="11 — 多线程基础">11 — 多线程基础</a><time datetime="2025-12-10T00:00:00.000Z" title="发表于 2025-12-10 08:00:00">2025-12-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2025/12/03/java10-io/" title="10 — IO流">10 — IO流</a><time datetime="2025-12-03T00:00:00.000Z" title="发表于 2025-12-03 08:00:00">2025-12-03</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@19.1.3/dist/lazyload.iife.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><canvas class="fireworks" mobile="false"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
