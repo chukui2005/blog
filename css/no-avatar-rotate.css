@@ -1,0 +1,6 @@
+.avatar-img img:hover {
+  transform: none !important;
+}
+#sidebar-menus .avatar-img img:hover {
+  transform: none !important;
+}
