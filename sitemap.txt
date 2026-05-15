@@ -1,5 +1,4 @@
 https://chukui2005.github.io/2026/01/03/mysql01-basics/
-https://chukui2005.github.io/2026/01/03/spring01-ioc/
 https://chukui2005.github.io/categories/index.html
 https://chukui2005.github.io/tags/index.html
 https://chukui2005.github.io/2025/10/01/java01-basics/
@@ -48,15 +47,15 @@ https://chukui2005.github.io/tags/ArrayList/
 https://chukui2005.github.io/tags/LinkedList/
 https://chukui2005.github.io/tags/HashSet/
 https://chukui2005.github.io/tags/TreeSet/
-https://chukui2005.github.io/tags/%E6%B3%9B%E5%9E%8B/
-https://chukui2005.github.io/tags/%E5%8F%8D%E5%B0%84/
-https://chukui2005.github.io/tags/%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86/
-https://chukui2005.github.io/tags/%E7%B1%BB%E5%9E%8B%E6%93%A6%E9%99%A4/
 https://chukui2005.github.io/tags/Map/
 https://chukui2005.github.io/tags/HashMap/
 https://chukui2005.github.io/tags/TreeMap/
 https://chukui2005.github.io/tags/Collections/
 https://chukui2005.github.io/tags/Queue/
+https://chukui2005.github.io/tags/%E6%B3%9B%E5%9E%8B/
+https://chukui2005.github.io/tags/%E5%8F%8D%E5%B0%84/
+https://chukui2005.github.io/tags/%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86/
+https://chukui2005.github.io/tags/%E7%B1%BB%E5%9E%8B%E6%93%A6%E9%99%A4/
 https://chukui2005.github.io/tags/IO/
 https://chukui2005.github.io/tags/%E6%96%87%E4%BB%B6%E6%93%8D%E4%BD%9C/
 https://chukui2005.github.io/tags/%E5%AD%97%E8%8A%82%E6%B5%81/
@@ -82,10 +81,5 @@ https://chukui2005.github.io/tags/%E5%87%BD%E6%95%B0%E5%BC%8F%E6%8E%A5%E5%8F%A3/
 https://chukui2005.github.io/tags/Optional/
 https://chukui2005.github.io/tags/MySQL/
 https://chukui2005.github.io/tags/SQL/
-https://chukui2005.github.io/tags/Spring/
-https://chukui2005.github.io/tags/IoC/
-https://chukui2005.github.io/tags/DI/
-https://chukui2005.github.io/tags/Bean/
 https://chukui2005.github.io/categories/Java%E5%9F%BA%E7%A1%80/
 https://chukui2005.github.io/categories/MySQL/
-https://chukui2005.github.io/categories/Spring/

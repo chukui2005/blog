@@ -11,15 +11,6 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/2026/01/03/spring01-ioc/</loc>
-    
-    <lastmod>2026-05-15</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://chukui2005.github.io/categories/index.html</loc>
     
     <lastmod>2026-05-15</lastmod>
@@ -390,34 +381,6 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/tags/%E6%B3%9B%E5%9E%8B/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/tags/%E5%8F%8D%E5%B0%84/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/tags/%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/tags/%E7%B1%BB%E5%9E%8B%E6%93%A6%E9%99%A4/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
     <loc>https://chukui2005.github.io/tags/Map/</loc>
     <lastmod>2026-05-15</lastmod>
     <changefreq>weekly</changefreq>
@@ -447,6 +410,34 @@
   
   <url>
     <loc>https://chukui2005.github.io/tags/Queue/</loc>
+    <lastmod>2026-05-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/tags/%E6%B3%9B%E5%9E%8B/</loc>
+    <lastmod>2026-05-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/tags/%E5%8F%8D%E5%B0%84/</loc>
+    <lastmod>2026-05-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/tags/%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86/</loc>
+    <lastmod>2026-05-15</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/tags/%E7%B1%BB%E5%9E%8B%E6%93%A6%E9%99%A4/</loc>
     <lastmod>2026-05-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -627,34 +618,6 @@
     <priority>0.2</priority>
   </url>
   
-  <url>
-    <loc>https://chukui2005.github.io/tags/Spring/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/tags/IoC/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/tags/DI/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/tags/Bean/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
 
   
   <url>
@@ -666,13 +629,6 @@
   
   <url>
     <loc>https://chukui2005.github.io/categories/MySQL/</loc>
-    <lastmod>2026-05-15</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://chukui2005.github.io/categories/Spring/</loc>
     <lastmod>2026-05-15</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
