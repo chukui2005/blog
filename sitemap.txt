@@ -1,3 +1,4 @@
+https://chukui2005.github.io/2026/05/20/spring06-boot-auto-config/
 https://chukui2005.github.io/2026/05/20/spring07-cloud/
 https://chukui2005.github.io/2026/05/20/spring05-mvc/
 https://chukui2005.github.io/2026/05/20/spring04-transaction/
@@ -125,6 +126,9 @@ https://chukui2005.github.io/tags/Nacos/
 https://chukui2005.github.io/tags/Feign/
 https://chukui2005.github.io/tags/Gateway/
 https://chukui2005.github.io/tags/Sentinel/
+https://chukui2005.github.io/tags/Spring-Boot/
+https://chukui2005.github.io/tags/%E8%87%AA%E5%8A%A8%E9%85%8D%E7%BD%AE/
+https://chukui2005.github.io/tags/EnableAutoConfiguration/
 https://chukui2005.github.io/categories/Java%E5%9F%BA%E7%A1%80/
 https://chukui2005.github.io/categories/MySQL/
 https://chukui2005.github.io/categories/Spring%E5%85%A8%E5%AE%B6%E6%A1%B6/
