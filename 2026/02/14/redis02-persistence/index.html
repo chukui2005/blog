@@ -1,0 +1,938 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>02 — Redis持久化：RDB与AOF | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Redis持久化：RDB与AOF核心知识点速览   知识点 要点    RDB 快照持久化，定时全量备份，二进制文件   AOF 追加日志持久化，记录写命令，文本文件   混合持久化 Redis 4.0+，RDB做全量 + AOF做增量   RDB触发 save（同步阻塞）&#x2F; bgsave（fork子进程）   AOF写回策略 always &#x2F; everysec（推荐）&amp;#x2">
+<meta property="og:type" content="article">
+<meta property="og:title" content="02 — Redis持久化：RDB与AOF">
+<meta property="og:url" content="https://chukui2005.github.io/2026/02/14/redis02-persistence/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="Redis持久化：RDB与AOF核心知识点速览   知识点 要点    RDB 快照持久化，定时全量备份，二进制文件   AOF 追加日志持久化，记录写命令，文本文件   混合持久化 Redis 4.0+，RDB做全量 + AOF做增量   RDB触发 save（同步阻塞）&#x2F; bgsave（fork子进程）   AOF写回策略 always &#x2F; everysec（推荐）&amp;#x2">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-02-14T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-05-26T13:40:28.791Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="持久化">
+<meta property="article:tag" content="RDB">
+<meta property="article:tag" content="AOF">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "02 — Redis持久化：RDB与AOF",
+  "url": "https://chukui2005.github.io/2026/02/14/redis02-persistence/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-02-14T00:00:00.000Z",
+  "dateModified": "2026-05-26T13:40:28.791Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/02/14/redis02-persistence/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '02 — Redis持久化：RDB与AOF',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">02 — Redis持久化：RDB与AOF</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">02 — Redis持久化：RDB与AOF<a class="post-edit-link" href="null_posts/redis02-persistence.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-02-14T00:00:00.000Z" title="发表于 2026-02-14 08:00:00">2026-02-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-05-26T13:40:28.791Z" title="更新于 2026-05-26 21:40:28">2026-05-26</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/Redis/">Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.4k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>4分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-05-26 21:40:28&quot;}" hidden></div><h1 id="Redis持久化：RDB与AOF"><a href="#Redis持久化：RDB与AOF" class="headerlink" title="Redis持久化：RDB与AOF"></a>Redis持久化：RDB与AOF</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RDB</td>
+<td>快照持久化，定时全量备份，二进制文件</td>
+</tr>
+<tr>
+<td>AOF</td>
+<td>追加日志持久化，记录写命令，文本文件</td>
+</tr>
+<tr>
+<td>混合持久化</td>
+<td>Redis 4.0+，RDB做全量 + AOF做增量</td>
+</tr>
+<tr>
+<td>RDB触发</td>
+<td>save（同步阻塞）&#x2F; bgsave（fork子进程）</td>
+</tr>
+<tr>
+<td>AOF写回策略</td>
+<td>always &#x2F; everysec（推荐）&#x2F; no</td>
+</tr>
+<tr>
+<td>AOF重写</td>
+<td>BGREWRITEAOF，压缩AOF文件体积</td>
+</tr>
+<tr>
+<td>选型建议</td>
+<td>两者都用（混合持久化），兼顾性能和数据安全</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、为什么需要持久化"><a href="#一、为什么需要持久化" class="headerlink" title="一、为什么需要持久化"></a>一、为什么需要持久化</h2><p>Redis数据在内存里，一旦进程退出或服务器宕机，内存数据全部丢失。</p>
+<p>持久化就是把内存中的数据保存到硬盘，下次启动时恢复。</p>
+<hr>
+<h2 id="二、RDB（Redis-DataBase）"><a href="#二、RDB（Redis-DataBase）" class="headerlink" title="二、RDB（Redis DataBase）"></a>二、RDB（Redis DataBase）</h2><h3 id="2-1-原理"><a href="#2-1-原理" class="headerlink" title="2.1 原理"></a>2.1 原理</h3><p>RDB是<strong>快照持久化</strong>，把某个时间点的全量数据保存到一个二进制文件（dump.rdb）。</p>
+<p>就像拍照一样，拍的是那一刻的状态。</p>
+<h3 id="2-2-触发方式"><a href="#2-2-触发方式" class="headerlink" title="2.2 触发方式"></a>2.2 触发方式</h3><p><strong>手动触发：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SAVE     → 同步阻塞，Redis主进程直接生成RDB</span><br><span class="line">           （生产环境不用，会阻塞所有请求）</span><br><span class="line"></span><br><span class="line">BGSAVE   → 异步，fork子进程，子进程生成RDB</span><br><span class="line">           （生产环境用这个）</span><br></pre></td></tr></table></figure>
+
+<p><strong>自动触发（配置）：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># redis.conf</span><br><span class="line">save 900 1       → 900秒内至少1个key变化 → 触发bgsave</span><br><span class="line">save 300 10      → 300秒内至少10个key变化</span><br><span class="line">save 60 10000    → 60秒内至少10000个key变化</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-Fork-COW（Copy-On-Write）"><a href="#2-3-Fork-COW（Copy-On-Write）" class="headerlink" title="2.3 Fork + COW（Copy On Write）"></a>2.3 Fork + COW（Copy On Write）</h3><p>BGSAVE的核心机制：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">① Redis主进程调用fork()，创建一个子进程</span><br><span class="line">② 子进程拥有主进程的完整内存快照（虚拟内存映射）</span><br><span class="line">③ 子进程开始写RDB文件</span><br><span class="line">④ 主进程继续处理请求</span><br><span class="line">   → 如果期间有数据修改，主进程复制被修改的内存页再改</span><br><span class="line">   → 子进程看到的是fork那一刻的数据（一致性）</span><br></pre></td></tr></table></figure>
+
+<p><strong>fork的代价：</strong> fork需要复制页表，内存越大fork越慢（1GB大约20ms）。</p>
+<h3 id="2-4-RDB的优缺点"><a href="#2-4-RDB的优缺点" class="headerlink" title="2.4 RDB的优缺点"></a>2.4 RDB的优缺点</h3><p><strong>优点：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 文件紧凑，适合做全量备份（可以按天/周备份）</span><br><span class="line">② 恢复速度快（直接加载二进制文件）</span><br><span class="line">③ 子进程生成，主进程性能影响小</span><br></pre></td></tr></table></figure>
+
+<p><strong>缺点：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 丢失数据多（两次快照之间的数据全部丢失）</span><br><span class="line">   如果5分钟一次快照，宕机就丢5分钟的数据</span><br><span class="line">② fork子进程时，如果内存大，会有短暂卡顿</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、AOF（Append-Only-File）"><a href="#三、AOF（Append-Only-File）" class="headerlink" title="三、AOF（Append Only File）"></a>三、AOF（Append Only File）</h2><h3 id="3-1-原理"><a href="#3-1-原理" class="headerlink" title="3.1 原理"></a>3.1 原理</h3><p>AOF是<strong>追加日志</strong>，记录每条<strong>写命令</strong>（读不记录）。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SET name &quot;张三&quot;</span><br><span class="line">→ AOF文件追加一条：*3 $3 SET $4 name $6 张三</span><br><span class="line"></span><br><span class="line">INCR age</span><br><span class="line">→ AOF文件追加一条：*2 $4 INCR $3 age</span><br></pre></td></tr></table></figure>
+
+<p>重启时，逐条执行AOF文件中的命令，恢复数据。</p>
+<h3 id="3-2-写回策略（appendfsync）"><a href="#3-2-写回策略（appendfsync）" class="headerlink" title="3.2 写回策略（appendfsync）"></a>3.2 写回策略（appendfsync）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">always      → 每次写命令都刷盘</span><br><span class="line">              最安全（最多丢1条），最慢</span><br><span class="line"></span><br><span class="line">everysec    → 每秒刷一次盘（推荐）</span><br><span class="line">              最多丢1秒的数据，性能和安全的平衡</span><br><span class="line"></span><br><span class="line">no          → 由操作系统决定什么时候刷盘</span><br><span class="line">              最快，但丢数据最多</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-AOF重写（Rewrite）"><a href="#3-3-AOF重写（Rewrite）" class="headerlink" title="3.3 AOF重写（Rewrite）"></a>3.3 AOF重写（Rewrite）</h3><p>AOF文件会越来越大，需要重写压缩。</p>
+<p><strong>为什么AOF文件会膨胀：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">INCR count  → +1</span><br><span class="line">INCR count  → +1</span><br><span class="line">INCR count  → +1</span><br><span class="line">...</span><br><span class="line">累计100万条写入 → AOF相当于100万行</span><br><span class="line"></span><br><span class="line">重写后 → SET count 1000000  → 就一行</span><br></pre></td></tr></table></figure>
+
+<p><strong>触发方式：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">BGREWRITEAOF → 手动触发</span><br><span class="line"></span><br><span class="line"># 自动触发配置</span><br><span class="line">auto-aof-rewrite-percentage 100   → 文件大小翻倍时触发</span><br><span class="line">auto-aof-rewrite-min-size 64mb    → 触发的最小文件大小</span><br></pre></td></tr></table></figure>
+
+<p><strong>重写原理（和BGSAVE类似）：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">① fork子进程</span><br><span class="line">② 子进程读取当前内存中的数据，生成最简写命令</span><br><span class="line">③ 重写期间主进程的新写命令写入&quot;重写缓冲区&quot;</span><br><span class="line">④ 子进程完成后，把缓冲区的新命令追加到新AOF文件</span><br><span class="line">⑤ 原子替换旧AOF文件</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-4-AOF的优缺点"><a href="#3-4-AOF的优缺点" class="headerlink" title="3.4 AOF的优缺点"></a>3.4 AOF的优缺点</h3><p><strong>优点：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">① 数据丢失少（evenysec最多丢1秒）</span><br><span class="line">② 文件易读，可以手动修改修复</span><br></pre></td></tr></table></figure>
+
+<p><strong>缺点：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">① 文件比RDB大得多（存的是命令不是二进制）</span><br><span class="line">② 恢复速度比RDB慢（要逐条执行命令）</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="四、混合持久化（Redis-4-0-）"><a href="#四、混合持久化（Redis-4-0-）" class="headerlink" title="四、混合持久化（Redis 4.0+）"></a>四、混合持久化（Redis 4.0+）</h2><p><strong>配置：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">aof-use-rdb-preamble yes    → 开启混合持久化</span><br></pre></td></tr></table></figure>
+
+<p><strong>原理：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">AOF重写时：</span><br><span class="line">  ① 先把当前数据以RDB格式写到AOF文件开头</span><br><span class="line">  ② 之后的新写命令以AOF格式追加到后面</span><br><span class="line"></span><br><span class="line">结果：AOF文件 = 前半段RDB + 后半段AOF</span><br></pre></td></tr></table></figure>
+
+<p><strong>AOF文件结构：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[RDB二进制数据...] [AOF命令...] [AOF命令...]</span><br><span class="line">↑ 全量快照          ↑ 增量命令</span><br></pre></td></tr></table></figure>
+
+<p><strong>优点：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 加载快：前半段RDB直接加载，不用逐条执行</span><br><span class="line">② 丢数据少：后半段AOF保证增量安全</span><br><span class="line">→ 推荐方案：同时开启RDB + AOF（混合持久化）</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="五、恢复策略"><a href="#五、恢复策略" class="headerlink" title="五、恢复策略"></a>五、恢复策略</h2><p><strong>启动时加载顺序：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 优先加载AOF（AOF数据更完整）</span><br><span class="line">② AOF不存在才加载RDB</span><br><span class="line">③ 都加载成功才能启动</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="六、生产配置建议"><a href="#六、生产配置建议" class="headerlink" title="六、生产配置建议"></a>六、生产配置建议</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"># 建议配置</span><br><span class="line">save 900 1</span><br><span class="line">save 300 10</span><br><span class="line">save 60 10000</span><br><span class="line"></span><br><span class="line">appendonly yes              → 开启AOF</span><br><span class="line">appendfsync everysec        → 每秒刷盘</span><br><span class="line">no-appendfsync-on-rewrite yes → 重写时不刷盘，防阻塞</span><br><span class="line">auto-aof-rewrite-percentage 100</span><br><span class="line">auto-aof-rewrite-min-size 64mb</span><br><span class="line">aof-use-rdb-preamble yes    → 混合持久化</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="七、面试直击"><a href="#七、面试直击" class="headerlink" title="七、面试直击"></a>七、面试直击</h2><h3 id="Q1：RDB和AOF的区别？"><a href="#Q1：RDB和AOF的区别？" class="headerlink" title="Q1：RDB和AOF的区别？"></a>Q1：RDB和AOF的区别？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">RDB： 全量快照 + 二进制 + 体积小 + 恢复快 + 丢数据多</span><br><span class="line">AOF： 增量日志 + 文本   + 体积大 + 恢复慢 + 丢数据少</span><br><span class="line">混合： 两者结合，恢复快且丢数据少</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q2：BGSAVE的原理？"><a href="#Q2：BGSAVE的原理？" class="headerlink" title="Q2：BGSAVE的原理？"></a>Q2：BGSAVE的原理？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">① fork子进程</span><br><span class="line">② 子进程利用COW机制生成RDB快照</span><br><span class="line">③ 主进程继续处理请求</span><br><span class="line">④ 期间修改的页被复制（COW），不影响子进程</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q3：AOF重写的过程？"><a href="#Q3：AOF重写的过程？" class="headerlink" title="Q3：AOF重写的过程？"></a>Q3：AOF重写的过程？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">① fork子进程</span><br><span class="line">② 子进程读内存数据，生成最简命令</span><br><span class="line">③ 主进程的新写命令写入重写缓冲区</span><br><span class="line">④ 子进程完成 → 缓冲区数据追加到新AOF</span><br><span class="line">⑤ 原子替换旧文件</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q4：AOF的三种写回策略？"><a href="#Q4：AOF的三种写回策略？" class="headerlink" title="Q4：AOF的三种写回策略？"></a>Q4：AOF的三种写回策略？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">always    → 每次写都刷盘 — 最安全最慢</span><br><span class="line">everysec  → 每秒刷盘     — 推荐，丢1秒数据</span><br><span class="line">no        → 系统决定     — 最快但丢最多</span><br></pre></td></tr></table></figure>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/02/14/redis02-persistence/">https://chukui2005.github.io/2026/02/14/redis02-persistence/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Redis/">Redis</a><a class="post-meta__tags" href="/blog/tags/%E6%8C%81%E4%B9%85%E5%8C%96/">持久化</a><a class="post-meta__tags" href="/blog/tags/RDB/">RDB</a><a class="post-meta__tags" href="/blog/tags/AOF/">AOF</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/02/17/redis03-master-slave-sentinel/" title="03 — 主从架构与哨兵机制"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">03 — 主从架构与哨兵机制</div></div><div class="info-2"><div class="info-item-1">主从架构与哨兵机制核心知识点速览   知识点 要点    主从复制 一主多从，主写从读，数据单向同步   全量复制 从节点首次连接&#x2F;断连重连，主节点生成RDB发给从   增量复制 断开重连后，只同步断连期间丢失的命令   复制偏移量 主从各自维护offset，用于判断数据一致性   复制积压缓冲区 主节点维护的环形缓冲区，存最近N字节写命令   哨兵机制 监控 + 自动故障转移 + 通知   哨兵选举 Raft算法，超过半数哨兵同意才切换    一、主从架构1.1 基本结构1234567891011Client（读）          Client（读）          Client（读）    ↑                    ↑                    ↑    ├────────┬───────────┴───────────┬────────┤    │        │                       │        │[Slave A]  [Slave B]            [Slave C]  [Slave D]...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/11/redis01-basics/" title="01 — Redis基础与五种核心数据类型"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">01 — Redis基础与五种核心数据类型</div></div><div class="info-2"><div class="info-item-1">Redis基础与五种核心数据类型核心知识点速览   知识点 要点    Redis是什么 内存型NoSQL数据库，单线程模型，基于IO多路复用   五种核心类型 String &#x2F; Hash &#x2F; List &#x2F; Set &#x2F; ZSet（有序集合）   String 最基础类型，value上限512MB，可用于计数&#x2F;缓存   Hash 类似Map，适合存对象字段，内存友好   List 双向链表，可用于消息队列&#x2F;最新消息   Set 无序去重集合，支持交并补运算   ZSet 有序集合，每个元素带score，可用于排行榜   通用命令 KEYS（慎用）&#x2F; SCAN &#x2F; EXPIRE &#x2F; TTL &#x2F; DEL    一、Redis简介Redis（Remote Dictionary Server）是一个基于内存的Key-Value NoSQL数据库。 核心特点： 12345① 数据全在内存 → 读写极快（10W+ QPS）② 单线程模型 → 不存在并发竞争③ 丰富的数据类型 → 不止是缓存④ 支...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/02/23/redis05-cache-design/" title="05 — 缓存设计：穿透、击穿、雪崩"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-23</div><div class="info-item-2">05 — 缓存设计：穿透、击穿、雪崩</div></div><div class="info-2"><div class="info-item-1">缓存设计：穿透、击穿、雪崩核心知识点速览   知识点 要点    缓存穿透 查不存在的数据，绕过缓存直接查DB   缓存击穿 热点key过期，瞬间大量请求打到DB   缓存雪崩 大量key同时过期 &#x2F; Redis宕机，DB被打垮   穿透方案 布隆过滤器 &#x2F; 缓存空值   击穿方案 永不过期 + 异步刷新 &#x2F; 互斥锁   雪崩方案 过期时间加随机值 &#x2F; 多级缓存 &#x2F; 限流降级   缓存一致性 先更新DB再删缓存（旁路缓存）    一、缓存穿透1.1 什么是缓存穿透12345678910查询一个不存在的数据：用户请求 → 查缓存 → 没有（该key不存在）         → 查DB  → 也没有         → 不写缓存         → 下次再查，又走一遍恶意请求频繁查询不存在的ID→ 每次都会打到DB→ DB可能被压垮  本质： 缓存中没有，DB中也没有，所以每次都穿透缓存直接查DB。 1.2 解决方案一：缓存空值12345678910111213查询DB没查到时，也写一个空值到缓存步骤：① 查缓存 → 没有② 查DB ...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/17/redis03-master-slave-sentinel/" title="03 — 主从架构与哨兵机制"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-17</div><div class="info-item-2">03 — 主从架构与哨兵机制</div></div><div class="info-2"><div class="info-item-1">主从架构与哨兵机制核心知识点速览   知识点 要点    主从复制 一主多从，主写从读，数据单向同步   全量复制 从节点首次连接&#x2F;断连重连，主节点生成RDB发给从   增量复制 断开重连后，只同步断连期间丢失的命令   复制偏移量 主从各自维护offset，用于判断数据一致性   复制积压缓冲区 主节点维护的环形缓冲区，存最近N字节写命令   哨兵机制 监控 + 自动故障转移 + 通知   哨兵选举 Raft算法，超过半数哨兵同意才切换    一、主从架构1.1 基本结构1234567891011Client（读）          Client（读）          Client（读）    ↑                    ↑                    ↑    ├────────┬───────────┴───────────┬────────┤    │        │                       │        │[Slave A]  [Slave B]            [Slave C]  [Slave D]...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/11/redis01-basics/" title="01 — Redis基础与五种核心数据类型"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-11</div><div class="info-item-2">01 — Redis基础与五种核心数据类型</div></div><div class="info-2"><div class="info-item-1">Redis基础与五种核心数据类型核心知识点速览   知识点 要点    Redis是什么 内存型NoSQL数据库，单线程模型，基于IO多路复用   五种核心类型 String &#x2F; Hash &#x2F; List &#x2F; Set &#x2F; ZSet（有序集合）   String 最基础类型，value上限512MB，可用于计数&#x2F;缓存   Hash 类似Map，适合存对象字段，内存友好   List 双向链表，可用于消息队列&#x2F;最新消息   Set 无序去重集合，支持交并补运算   ZSet 有序集合，每个元素带score，可用于排行榜   通用命令 KEYS（慎用）&#x2F; SCAN &#x2F; EXPIRE &#x2F; TTL &#x2F; DEL    一、Redis简介Redis（Remote Dictionary Server）是一个基于内存的Key-Value NoSQL数据库。 核心特点： 12345① 数据全在内存 → 读写极快（10W+ QPS）② 单线程模型 → 不存在并发竞争③ 丰富的数据类型 → 不止是缓存④ 支...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/20/redis04-cluster/" title="04 — Redis集群（Cluster）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-20</div><div class="info-item-2">04 — Redis集群（Cluster）</div></div><div class="info-2"><div class="info-item-1">Redis集群（Cluster）核心知识点速览   知识点 要点    为什么需要集群 主从+哨兵解决高可用，但不解决容量和性能瓶颈   数据分片 16384个哈希槽，CRC16(key) % 16384 决定分配到哪个节点   节点通信 Gossip协议，节点间不断交换状态信息   去中心化 没有中心节点，每个节点都知道全集群状态   高可用 集群内主从切换，主挂了从顶上   限制 不支持多key操作（不在同一个slot）、事务   客户端路由 smart client &#x2F; proxy（Twemproxy&#x2F;Codis）    一、为什么需要集群主从+哨兵方案的问题： 123① 单机容量有限（内存上限 = 最⼤的那台机器的内存）② 读写性能有上限（单机10W QPS，不够了怎么办）③ 所有写操作都在一个主节点上（仍然是单点写入）  集群（Cluster）方案： 123把数据自动分片到多个节点上每个节点负责一部分数据容量和性能可以水平扩展   二、数据分片：哈希槽2.1 槽（Slot）的概念Redis Cluster固定划分 16384个哈希槽。 12345槽的...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/01/redis07-expire-eviction/" title="07 — 过期策略与内存淘汰"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-01</div><div class="info-item-2">07 — 过期策略与内存淘汰</div></div><div class="info-2"><div class="info-item-1">过期策略与内存淘汰核心知识点速览   知识点 要点    过期策略 定期删除 + 惰性删除（不是定时扫描）   定期删除 每100ms随机抽查20个过期key，删掉过期的   惰性删除 key被访问时才检查是否过期，过期则删   定时删除 每个过期key都启动一个定时器（不采用，太耗CPU）   内存淘汰 内存满了时，怎么腾出空间   8种淘汰策略 noeviction &#x2F; allkeys-lru &#x2F; volatile-lru &#x2F; allkeys-lfu &#x2F; volatile-lfu &#x2F; allkeys-random &#x2F; volatile-random &#x2F; volatile-ttl   生产推荐 allkeys-lru（最近最少使用的key优先淘汰）   LRU vs LFU LRU看最近一次访问，LFU看访问频率    一、过期策略1.1 三种方案对比12345678910111213141516定时删除（不用）：  每个设置了过期时间的key都创建一个定时器  到时间就删  优点：内存最友好（到点就删）  ...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/10/redis10-performance/" title="10 — Redis性能优化与最佳实践"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-10</div><div class="info-item-2">10 — Redis性能优化与最佳实践</div></div><div class="info-2"><div class="info-item-1">Redis性能优化与最佳实践核心知识点速览   知识点 要点    Big Key 一个key的数据量过大（&gt;10KB）→ 慢查询&#x2F;阻塞   Hot Key 一个key被大量并发访问 → 单节点瓶颈   慢查询 执行时间超过slowlog-log-slower-than的命令   性能指标 QPS &#x2F; 延迟 &#x2F; 内存使用率 &#x2F; 命中率   优化原则 减少RTT &#x2F; 避免大key &#x2F; 选对数据结构   雪崩预防 过期时间加随机值 &#x2F; 多级缓存 &#x2F; 限流   线上问题 排查思路：慢查询 → BigKey → 热Key → 内存    一、Big Key（大Key）问题1.1 什么是Big Key1234567String类型：  value &gt; 10KB 就算大key  value &gt; 100MB 就是超大key集合类型（List/Hash/Set/ZSet）：  元素数量 &gt; 5000 算大key  元素数量 &gt; 10000 建议拆分  1.2 Big Key的危害1234...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">38</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">138</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Redis%E6%8C%81%E4%B9%85%E5%8C%96%EF%BC%9ARDB%E4%B8%8EAOF"><span class="toc-number">1.</span> <span class="toc-text">Redis持久化：RDB与AOF</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">1.2.</span> <span class="toc-text">一、为什么需要持久化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81RDB%EF%BC%88Redis-DataBase%EF%BC%89"><span class="toc-number">1.3.</span> <span class="toc-text">二、RDB（Redis DataBase）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E5%8E%9F%E7%90%86"><span class="toc-number">1.3.1.</span> <span class="toc-text">2.1 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E8%A7%A6%E5%8F%91%E6%96%B9%E5%BC%8F"><span class="toc-number">1.3.2.</span> <span class="toc-text">2.2 触发方式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Fork-COW%EF%BC%88Copy-On-Write%EF%BC%89"><span class="toc-number">1.3.3.</span> <span class="toc-text">2.3 Fork + COW（Copy On Write）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-RDB%E7%9A%84%E4%BC%98%E7%BC%BA%E7%82%B9"><span class="toc-number">1.3.4.</span> <span class="toc-text">2.4 RDB的优缺点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81AOF%EF%BC%88Append-Only-File%EF%BC%89"><span class="toc-number">1.4.</span> <span class="toc-text">三、AOF（Append Only File）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%8E%9F%E7%90%86"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%86%99%E5%9B%9E%E7%AD%96%E7%95%A5%EF%BC%88appendfsync%EF%BC%89"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 写回策略（appendfsync）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-AOF%E9%87%8D%E5%86%99%EF%BC%88Rewrite%EF%BC%89"><span class="toc-number">1.4.3.</span> <span class="toc-text">3.3 AOF重写（Rewrite）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-AOF%E7%9A%84%E4%BC%98%E7%BC%BA%E7%82%B9"><span class="toc-number">1.4.4.</span> <span class="toc-text">3.4 AOF的优缺点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%B7%B7%E5%90%88%E6%8C%81%E4%B9%85%E5%8C%96%EF%BC%88Redis-4-0-%EF%BC%89"><span class="toc-number">1.5.</span> <span class="toc-text">四、混合持久化（Redis 4.0+）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E6%81%A2%E5%A4%8D%E7%AD%96%E7%95%A5"><span class="toc-number">1.6.</span> <span class="toc-text">五、恢复策略</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E7%94%9F%E4%BA%A7%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.7.</span> <span class="toc-text">六、生产配置建议</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E9%9D%A2%E8%AF%95%E7%9B%B4%E5%87%BB"><span class="toc-number">1.8.</span> <span class="toc-text">七、面试直击</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Q1%EF%BC%9ARDB%E5%92%8CAOF%E7%9A%84%E5%8C%BA%E5%88%AB%EF%BC%9F"><span class="toc-number">1.8.1.</span> <span class="toc-text">Q1：RDB和AOF的区别？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q2%EF%BC%9ABGSAVE%E7%9A%84%E5%8E%9F%E7%90%86%EF%BC%9F"><span class="toc-number">1.8.2.</span> <span class="toc-text">Q2：BGSAVE的原理？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q3%EF%BC%9AAOF%E9%87%8D%E5%86%99%E7%9A%84%E8%BF%87%E7%A8%8B%EF%BC%9F"><span class="toc-number">1.8.3.</span> <span class="toc-text">Q3：AOF重写的过程？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q4%EF%BC%9AAOF%E7%9A%84%E4%B8%89%E7%A7%8D%E5%86%99%E5%9B%9E%E7%AD%96%E7%95%A5%EF%BC%9F"><span class="toc-number">1.8.4.</span> <span class="toc-text">Q4：AOF的三种写回策略？</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:30:00.000Z" title="发表于 2026-05-26 21:30:00">2026-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/10/redis10-performance/" title="10 — Redis性能优化与最佳实践">10 — Redis性能优化与最佳实践</a><time datetime="2026-03-10T00:00:00.000Z" title="发表于 2026-03-10 08:00:00">2026-03-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/07/redis09-advanced-data-structures/" title="09 — Redis高级数据结构">09 — Redis高级数据结构</a><time datetime="2026-03-07T00:00:00.000Z" title="发表于 2026-03-07 08:00:00">2026-03-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/04/redis08-transaction-pipeline-lua/" title="08 — 事务、管道与Lua脚本">08 — 事务、管道与Lua脚本</a><time datetime="2026-03-04T00:00:00.000Z" title="发表于 2026-03-04 08:00:00">2026-03-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/01/redis07-expire-eviction/" title="07 — 过期策略与内存淘汰">07 — 过期策略与内存淘汰</a><time datetime="2026-03-01T00:00:00.000Z" title="发表于 2026-03-01 08:00:00">2026-03-01</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@19.1.3/dist/lazyload.iife.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

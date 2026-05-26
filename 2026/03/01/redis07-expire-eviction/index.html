@@ -1,0 +1,920 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>07 — 过期策略与内存淘汰 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="过期策略与内存淘汰核心知识点速览   知识点 要点    过期策略 定期删除 + 惰性删除（不是定时扫描）   定期删除 每100ms随机抽查20个过期key，删掉过期的   惰性删除 key被访问时才检查是否过期，过期则删   定时删除 每个过期key都启动一个定时器（不采用，太耗CPU）   内存淘汰 内存满了时，怎么腾出空间   8种淘汰策略 noeviction &#x2F; allkey">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07 — 过期策略与内存淘汰">
+<meta property="og:url" content="https://chukui2005.github.io/2026/03/01/redis07-expire-eviction/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="过期策略与内存淘汰核心知识点速览   知识点 要点    过期策略 定期删除 + 惰性删除（不是定时扫描）   定期删除 每100ms随机抽查20个过期key，删掉过期的   惰性删除 key被访问时才检查是否过期，过期则删   定时删除 每个过期key都启动一个定时器（不采用，太耗CPU）   内存淘汰 内存满了时，怎么腾出空间   8种淘汰策略 noeviction &#x2F; allkey">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-03-01T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-05-26T13:40:28.791Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="过期策略">
+<meta property="article:tag" content="内存淘汰">
+<meta property="article:tag" content="LRU">
+<meta property="article:tag" content="LFU">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "07 — 过期策略与内存淘汰",
+  "url": "https://chukui2005.github.io/2026/03/01/redis07-expire-eviction/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-03-01T00:00:00.000Z",
+  "dateModified": "2026-05-26T13:40:28.791Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/03/01/redis07-expire-eviction/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '07 — 过期策略与内存淘汰',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">07 — 过期策略与内存淘汰</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">07 — 过期策略与内存淘汰<a class="post-edit-link" href="null_posts/redis07-expire-eviction.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-03-01T00:00:00.000Z" title="发表于 2026-03-01 08:00:00">2026-03-01</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-05-26T13:40:28.791Z" title="更新于 2026-05-26 21:40:28">2026-05-26</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/Redis/">Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>4分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-05-26 21:40:28&quot;}" hidden></div><h1 id="过期策略与内存淘汰"><a href="#过期策略与内存淘汰" class="headerlink" title="过期策略与内存淘汰"></a>过期策略与内存淘汰</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>过期策略</td>
+<td>定期删除 + 惰性删除（不是定时扫描）</td>
+</tr>
+<tr>
+<td>定期删除</td>
+<td>每100ms随机抽查20个过期key，删掉过期的</td>
+</tr>
+<tr>
+<td>惰性删除</td>
+<td>key被访问时才检查是否过期，过期则删</td>
+</tr>
+<tr>
+<td>定时删除</td>
+<td>每个过期key都启动一个定时器（不采用，太耗CPU）</td>
+</tr>
+<tr>
+<td>内存淘汰</td>
+<td>内存满了时，怎么腾出空间</td>
+</tr>
+<tr>
+<td>8种淘汰策略</td>
+<td>noeviction &#x2F; allkeys-lru &#x2F; volatile-lru &#x2F; allkeys-lfu &#x2F; volatile-lfu &#x2F; allkeys-random &#x2F; volatile-random &#x2F; volatile-ttl</td>
+</tr>
+<tr>
+<td>生产推荐</td>
+<td>allkeys-lru（最近最少使用的key优先淘汰）</td>
+</tr>
+<tr>
+<td>LRU vs LFU</td>
+<td>LRU看最近一次访问，LFU看访问频率</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、过期策略"><a href="#一、过期策略" class="headerlink" title="一、过期策略"></a>一、过期策略</h2><h3 id="1-1-三种方案对比"><a href="#1-1-三种方案对比" class="headerlink" title="1.1 三种方案对比"></a>1.1 三种方案对比</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">定时删除（不用）：</span><br><span class="line">  每个设置了过期时间的key都创建一个定时器</span><br><span class="line">  到时间就删</span><br><span class="line">  优点：内存最友好（到点就删）</span><br><span class="line">  缺点：CPU不友好（大量定时器占用CPU）</span><br><span class="line"></span><br><span class="line">惰性删除（用）：</span><br><span class="line">  访问key时才检查是否过期</span><br><span class="line">  过期了再删</span><br><span class="line">  优点：CPU友好（只处理被访问的key）</span><br><span class="line">  缺点：内存不友好（过期的key可能一直占内存）</span><br><span class="line"></span><br><span class="line">定期删除（用）：</span><br><span class="line">  每隔一段时间，随机抽查一部分key</span><br><span class="line">  删掉过期的</span><br><span class="line">  优点：CPU和内存的平衡</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-Redis实际策略：定期删除-惰性删除"><a href="#1-2-Redis实际策略：定期删除-惰性删除" class="headerlink" title="1.2 Redis实际策略：定期删除 + 惰性删除"></a>1.2 Redis实际策略：定期删除 + 惰性删除</h3><p><strong>Redis同时用了定期删除和惰性删除</strong>，两者互补。</p>
+<p><strong>定期删除的工作原理：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">① 每100ms运行一次（默认hz=10，每秒10次）</span><br><span class="line"></span><br><span class="line">② 每次随机抽查20个设置了过期时间的key</span><br><span class="line">   - 删除其中已经过期的</span><br><span class="line"></span><br><span class="line">③ 如果被删除的key超过25%（删了5个以上）</span><br><span class="line">   → 立即再抽查20个，继续删</span><br><span class="line">   → 循环下去，直到删除比例低于25% 或 超时</span><br><span class="line"></span><br><span class="line">④ 单次执行时间上限25ms</span><br><span class="line">   → 防止长时间阻塞</span><br></pre></td></tr></table></figure>
+
+<p><strong>惰性删除：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">每个key被访问时：</span><br><span class="line">  - 检查是否设置了过期时间</span><br><span class="line">  - 如果过期了 → 删除并返回nil</span><br><span class="line">  - 如果没过期 → 正常返回</span><br><span class="line"></span><br><span class="line">这样可以兜底：</span><br><span class="line">  定期删除没扫到的过期key</span><br><span class="line">  在被访问时也能被删掉</span><br></pre></td></tr></table></figure>
+
+<p><strong>两种策略配合，保证：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 大部分过期key会被定期删除清理掉</span><br><span class="line">② 少量漏网之鱼（长期不被访问）靠惰性删除</span><br><span class="line">③ 既不会耗光CPU，也不会让过期key一直占内存</span><br></pre></td></tr></table></figure>
+
+<p><strong>依然存在的问题：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">如果一个key设置了过期时间，但之后再也没被访问过</span><br><span class="line">定期删除也没扫到它（随机抽查不保证覆盖所有key）</span><br><span class="line"></span><br><span class="line">→ 这个key会一直占用内存</span><br><span class="line">→ 直到内存满了，触发内存淘汰策略</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="二、内存淘汰策略"><a href="#二、内存淘汰策略" class="headerlink" title="二、内存淘汰策略"></a>二、内存淘汰策略</h2><h3 id="2-1-什么时候触发"><a href="#2-1-什么时候触发" class="headerlink" title="2.1 什么时候触发"></a>2.1 什么时候触发</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">maxmemory 配置项（默认不限制）</span><br><span class="line">达到 maxmemory 上限时，Redis会尝试淘汰数据</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-8种淘汰策略"><a href="#2-2-8种淘汰策略" class="headerlink" title="2.2 8种淘汰策略"></a>2.2 8种淘汰策略</h3><p><strong>不淘汰：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">noeviction            → 不淘汰，写入报错（默认值）</span><br><span class="line">                        只读请求正常，写请求返回OOM</span><br></pre></td></tr></table></figure>
+
+<p><strong>淘汰所有key（不区分是否设置过期）：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">allkeys-lru          → 淘汰最近最少使用的key ★ 推荐</span><br><span class="line">allkeys-lfu          → 淘汰最不经常使用的key（4.0+）</span><br><span class="line">allkeys-random       → 随机淘汰</span><br></pre></td></tr></table></figure>
+
+<p><strong>只淘汰设置了过期时间的key：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">volatile-lru         → 淘汰最近最少使用的过期key</span><br><span class="line">volatile-lfu         → 淘汰最不经常使用的过期key（4.0+）</span><br><span class="line">volatile-random      → 随机淘汰过期key</span><br><span class="line">volatile-ttl         → 淘汰剩余过期时间最短的</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-LRU-vs-LFU"><a href="#2-3-LRU-vs-LFU" class="headerlink" title="2.3 LRU vs LFU"></a>2.3 LRU vs LFU</h3><p><strong>LRU（Least Recently Used）：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">淘汰最近最少使用的</span><br><span class="line">只看「上次什么时候用的」</span><br><span class="line"></span><br><span class="line">问题：一个key被大量访问后，很久没用</span><br><span class="line">      但前一次访问让它留在内存里</span><br><span class="line">      实际上已经不需要了</span><br><span class="line"></span><br><span class="line">示例：</span><br><span class="line">  key A：1分钟前被访问一次</span><br><span class="line">  key B：1小时前被访问10000次，之后没再访问</span><br><span class="line"></span><br><span class="line">  LRU会淘汰key B（因为key B最近的一次访问更早）</span><br><span class="line">  但实际上key A才是更该被淘汰的那个</span><br></pre></td></tr></table></figure>
+
+<p><strong>LFU（Least Frequently Used）：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">淘汰最不经常使用的</span><br><span class="line">看「过去一段时间内的访问频率」</span><br><span class="line"></span><br><span class="line">计数会随时间衰减（热数据降温）</span><br><span class="line">比LRU更合理</span><br><span class="line"></span><br><span class="line">4.0+ 版本可用</span><br></pre></td></tr></table></figure>
+
+<p><strong>生产建议：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">一般场景用 allkeys-lru 就够了</span><br><span class="line">如果有明显的冷热数据分化 → 用 allkeys-lfu</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、生产配置建议"><a href="#三、生产配置建议" class="headerlink" title="三、生产配置建议"></a>三、生产配置建议</h2><h3 id="3-1-内存配置"><a href="#3-1-内存配置" class="headerlink" title="3.1 内存配置"></a>3.1 内存配置</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"># redis.conf</span><br><span class="line"></span><br><span class="line"># 限制最大内存（根据机器配置）</span><br><span class="line">maxmemory 4gb</span><br><span class="line"></span><br><span class="line"># 淘汰策略（推荐）</span><br><span class="line">maxmemory-policy allkeys-lru</span><br><span class="line"></span><br><span class="line"># 采样数量</span><br><span class="line">maxmemory-samples 10</span><br><span class="line">  LRU/LFU/TTL算法不是扫描所有key</span><br><span class="line">  而是随机采样N个key，从中选最合适的淘汰</span><br><span class="line">  采样数越大，淘汰越精确，但越慢</span><br><span class="line">  默认5，推荐10</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-过期策略配置"><a href="#3-2-过期策略配置" class="headerlink" title="3.2 过期策略配置"></a>3.2 过期策略配置</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"># redis.conf</span><br><span class="line">hz 10</span><br><span class="line">  默认10（每秒执行10次定期删除）</span><br><span class="line">  业务场景实际要看CPU和key数量合理设置</span><br><span class="line">  CPU空闲 + key多 → 可以调高</span><br><span class="line">  CPU紧张 → 调低</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="四、面试直击"><a href="#四、面试直击" class="headerlink" title="四、面试直击"></a>四、面试直击</h2><h3 id="Q1：Redis的过期策略是什么？"><a href="#Q1：Redis的过期策略是什么？" class="headerlink" title="Q1：Redis的过期策略是什么？"></a>Q1：Redis的过期策略是什么？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">定期删除 + 惰性删除</span><br><span class="line">  定期：每100ms随机抽查20个过期key，删掉过期的</span><br><span class="line">  惰性：访问key时才检查过期，过期删</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q2：为什么不只用定时删除？"><a href="#Q2：为什么不只用定时删除？" class="headerlink" title="Q2：为什么不只用定时删除？"></a>Q2：为什么不只用定时删除？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">每个过期key都创建一个定时器</span><br><span class="line">大量key → 大量定时器 → CPU爆炸</span><br><span class="line">而且大多数key不会在精确到点的那一刻失效</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q3：内存淘汰策略有哪些？生产中推荐哪个？"><a href="#Q3：内存淘汰策略有哪些？生产中推荐哪个？" class="headerlink" title="Q3：内存淘汰策略有哪些？生产中推荐哪个？"></a>Q3：内存淘汰策略有哪些？生产中推荐哪个？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">8种策略，最常用是 allkeys-lru</span><br><span class="line"></span><br><span class="line">noeviction     → 满了不淘汰，报错</span><br><span class="line">allkeys-lru    → 淘汰最近最少用的 ★</span><br><span class="line">allkeys-lfu    → 淘汰最不常用的</span><br><span class="line">volatile-lru   → 只淘汰设置过过期时间中最近最少用的</span><br><span class="line">volatile-ttl   → 淘汰过期时间最短的</span><br><span class="line">...</span><br><span class="line"></span><br><span class="line">一般场景 allkeys-lru 最优</span><br><span class="line">冷热数据分化明显 → allkeys-lfu</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q4：LRU和LFU有什么区别？"><a href="#Q4：LRU和LFU有什么区别？" class="headerlink" title="Q4：LRU和LFU有什么区别？"></a>Q4：LRU和LFU有什么区别？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">LRU：看最近一次访问时间（淘汰上次访问最早的）</span><br><span class="line">LFU：看访问频率（淘汰访问最少的），4.0+ 支持</span><br><span class="line">LFU更合理，但LRU简单够用</span><br></pre></td></tr></table></figure>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/03/01/redis07-expire-eviction/">https://chukui2005.github.io/2026/03/01/redis07-expire-eviction/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Redis/">Redis</a><a class="post-meta__tags" href="/blog/tags/%E8%BF%87%E6%9C%9F%E7%AD%96%E7%95%A5/">过期策略</a><a class="post-meta__tags" href="/blog/tags/%E5%86%85%E5%AD%98%E6%B7%98%E6%B1%B0/">内存淘汰</a><a class="post-meta__tags" href="/blog/tags/LRU/">LRU</a><a class="post-meta__tags" href="/blog/tags/LFU/">LFU</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/03/04/redis08-transaction-pipeline-lua/" title="08 — 事务、管道与Lua脚本"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">08 — 事务、管道与Lua脚本</div></div><div class="info-2"><div class="info-item-1">事务、管道与Lua脚本核心知识点速览   知识点 要点    Redis事务 MULTI&#x2F;EXEC&#x2F;DISCARD&#x2F;WATCH，不支持回滚   事务 vs SQL事务 Redis事务不保证原子性（部分成功不回滚）   WATCH 乐观锁，key变化时事务取消   Pipeline 批量发送命令，减少网络RTT   Pipeline vs 事务 Pipeline只管传输，事务保证命令打包执行   Lua脚本 原子执行，替代事务+复杂逻辑   Lua性能 脚本在Redis直接执行，减少网络往返    一、Redis事务1.1 基本使用Redis事务用 MULTI、EXEC、DISCARD、WATCH 四个命令。 12345678&gt; MULTI              → 开启事务&gt; SET key1 val1      → 命令入队（不执行）&gt; SET key2 val2      → 命令入队（不执行）&gt; GET key1           → 命令入队&gt; EXEC               → 一次性执行所有入队命...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/26/redis06-distributed-lock/" title="06 — Redis分布式锁"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">06 — Redis分布式锁</div></div><div class="info-2"><div class="info-item-1">Redis分布式锁核心知识点速览   知识点 要点    为什么需要分布式锁 多进程&#x2F;多服务互斥访问共享资源   基本实现 SETNX + EXPIRE（分开两条命令有问题）   原子实现 SET key value NX EX 30（一条命令搞定）   锁超时 防止获得锁的进程挂了，锁永远不会释放   锁续期（看门狗） Redisson实现，锁快过期时自动续期   可重入 同一个线程可以多次获得同一把锁   RedLock Redis官方多节点锁方案（生产不太用）   最佳实践 Redisson框架，开箱即用    一、为什么需要分布式锁单体架构： 12synchronized / Lock 就够用了同一个JVM内的线程互斥  分布式架构： 12345678多个服务实例同时操作共享资源服务A（实例1） → Redis扣库存服务A（实例2） → Redis扣库存服务B（实例3） → Redis扣库存synchronized只能锁住一个JVM内的线程跨JVM需要分布式锁   二、锁的基本实现演变2.1 第一版：SETNX + EXPIRE（有坑）123456SETNX l...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/02/14/redis02-persistence/" title="02 — Redis持久化：RDB与AOF"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-14</div><div class="info-item-2">02 — Redis持久化：RDB与AOF</div></div><div class="info-2"><div class="info-item-1">Redis持久化：RDB与AOF核心知识点速览   知识点 要点    RDB 快照持久化，定时全量备份，二进制文件   AOF 追加日志持久化，记录写命令，文本文件   混合持久化 Redis 4.0+，RDB做全量 + AOF做增量   RDB触发 save（同步阻塞）&#x2F; bgsave（fork子进程）   AOF写回策略 always &#x2F; everysec（推荐）&#x2F; no   AOF重写 BGREWRITEAOF，压缩AOF文件体积   选型建议 两者都用（混合持久化），兼顾性能和数据安全    一、为什么需要持久化Redis数据在内存里，一旦进程退出或服务器宕机，内存数据全部丢失。 持久化就是把内存中的数据保存到硬盘，下次启动时恢复。  二、RDB（Redis DataBase）2.1 原理RDB是快照持久化，把某个时间点的全量数据保存到一个二进制文件（dump.rdb）。 就像拍照一样，拍的是那一刻的状态。 2.2 触发方式手动触发： 12345SAVE     → 同步阻塞，Redis主进程直接生成RDB           （生产环境不...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/10/redis10-performance/" title="10 — Redis性能优化与最佳实践"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-10</div><div class="info-item-2">10 — Redis性能优化与最佳实践</div></div><div class="info-2"><div class="info-item-1">Redis性能优化与最佳实践核心知识点速览   知识点 要点    Big Key 一个key的数据量过大（&gt;10KB）→ 慢查询&#x2F;阻塞   Hot Key 一个key被大量并发访问 → 单节点瓶颈   慢查询 执行时间超过slowlog-log-slower-than的命令   性能指标 QPS &#x2F; 延迟 &#x2F; 内存使用率 &#x2F; 命中率   优化原则 减少RTT &#x2F; 避免大key &#x2F; 选对数据结构   雪崩预防 过期时间加随机值 &#x2F; 多级缓存 &#x2F; 限流   线上问题 排查思路：慢查询 → BigKey → 热Key → 内存    一、Big Key（大Key）问题1.1 什么是Big Key1234567String类型：  value &gt; 10KB 就算大key  value &gt; 100MB 就是超大key集合类型（List/Hash/Set/ZSet）：  元素数量 &gt; 5000 算大key  元素数量 &gt; 10000 建议拆分  1.2 Big Key的危害1234...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/26/redis06-distributed-lock/" title="06 — Redis分布式锁"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-26</div><div class="info-item-2">06 — Redis分布式锁</div></div><div class="info-2"><div class="info-item-1">Redis分布式锁核心知识点速览   知识点 要点    为什么需要分布式锁 多进程&#x2F;多服务互斥访问共享资源   基本实现 SETNX + EXPIRE（分开两条命令有问题）   原子实现 SET key value NX EX 30（一条命令搞定）   锁超时 防止获得锁的进程挂了，锁永远不会释放   锁续期（看门狗） Redisson实现，锁快过期时自动续期   可重入 同一个线程可以多次获得同一把锁   RedLock Redis官方多节点锁方案（生产不太用）   最佳实践 Redisson框架，开箱即用    一、为什么需要分布式锁单体架构： 12synchronized / Lock 就够用了同一个JVM内的线程互斥  分布式架构： 12345678多个服务实例同时操作共享资源服务A（实例1） → Redis扣库存服务A（实例2） → Redis扣库存服务B（实例3） → Redis扣库存synchronized只能锁住一个JVM内的线程跨JVM需要分布式锁   二、锁的基本实现演变2.1 第一版：SETNX + EXPIRE（有坑）123456SETNX l...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/23/redis05-cache-design/" title="05 — 缓存设计：穿透、击穿、雪崩"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-23</div><div class="info-item-2">05 — 缓存设计：穿透、击穿、雪崩</div></div><div class="info-2"><div class="info-item-1">缓存设计：穿透、击穿、雪崩核心知识点速览   知识点 要点    缓存穿透 查不存在的数据，绕过缓存直接查DB   缓存击穿 热点key过期，瞬间大量请求打到DB   缓存雪崩 大量key同时过期 &#x2F; Redis宕机，DB被打垮   穿透方案 布隆过滤器 &#x2F; 缓存空值   击穿方案 永不过期 + 异步刷新 &#x2F; 互斥锁   雪崩方案 过期时间加随机值 &#x2F; 多级缓存 &#x2F; 限流降级   缓存一致性 先更新DB再删缓存（旁路缓存）    一、缓存穿透1.1 什么是缓存穿透12345678910查询一个不存在的数据：用户请求 → 查缓存 → 没有（该key不存在）         → 查DB  → 也没有         → 不写缓存         → 下次再查，又走一遍恶意请求频繁查询不存在的ID→ 每次都会打到DB→ DB可能被压垮  本质： 缓存中没有，DB中也没有，所以每次都穿透缓存直接查DB。 1.2 解决方案一：缓存空值12345678910111213查询DB没查到时，也写一个空值到缓存步骤：① 查缓存 → 没有② 查DB ...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/11/redis01-basics/" title="01 — Redis基础与五种核心数据类型"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-11</div><div class="info-item-2">01 — Redis基础与五种核心数据类型</div></div><div class="info-2"><div class="info-item-1">Redis基础与五种核心数据类型核心知识点速览   知识点 要点    Redis是什么 内存型NoSQL数据库，单线程模型，基于IO多路复用   五种核心类型 String &#x2F; Hash &#x2F; List &#x2F; Set &#x2F; ZSet（有序集合）   String 最基础类型，value上限512MB，可用于计数&#x2F;缓存   Hash 类似Map，适合存对象字段，内存友好   List 双向链表，可用于消息队列&#x2F;最新消息   Set 无序去重集合，支持交并补运算   ZSet 有序集合，每个元素带score，可用于排行榜   通用命令 KEYS（慎用）&#x2F; SCAN &#x2F; EXPIRE &#x2F; TTL &#x2F; DEL    一、Redis简介Redis（Remote Dictionary Server）是一个基于内存的Key-Value NoSQL数据库。 核心特点： 12345① 数据全在内存 → 读写极快（10W+ QPS）② 单线程模型 → 不存在并发竞争③ 丰富的数据类型 → 不止是缓存④ 支...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/20/redis04-cluster/" title="04 — Redis集群（Cluster）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-20</div><div class="info-item-2">04 — Redis集群（Cluster）</div></div><div class="info-2"><div class="info-item-1">Redis集群（Cluster）核心知识点速览   知识点 要点    为什么需要集群 主从+哨兵解决高可用，但不解决容量和性能瓶颈   数据分片 16384个哈希槽，CRC16(key) % 16384 决定分配到哪个节点   节点通信 Gossip协议，节点间不断交换状态信息   去中心化 没有中心节点，每个节点都知道全集群状态   高可用 集群内主从切换，主挂了从顶上   限制 不支持多key操作（不在同一个slot）、事务   客户端路由 smart client &#x2F; proxy（Twemproxy&#x2F;Codis）    一、为什么需要集群主从+哨兵方案的问题： 123① 单机容量有限（内存上限 = 最⼤的那台机器的内存）② 读写性能有上限（单机10W QPS，不够了怎么办）③ 所有写操作都在一个主节点上（仍然是单点写入）  集群（Cluster）方案： 123把数据自动分片到多个节点上每个节点负责一部分数据容量和性能可以水平扩展   二、数据分片：哈希槽2.1 槽（Slot）的概念Redis Cluster固定划分 16384个哈希槽。 12345槽的...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">38</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">138</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E8%BF%87%E6%9C%9F%E7%AD%96%E7%95%A5%E4%B8%8E%E5%86%85%E5%AD%98%E6%B7%98%E6%B1%B0"><span class="toc-number">1.</span> <span class="toc-text">过期策略与内存淘汰</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E8%BF%87%E6%9C%9F%E7%AD%96%E7%95%A5"><span class="toc-number">1.2.</span> <span class="toc-text">一、过期策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E4%B8%89%E7%A7%8D%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94"><span class="toc-number">1.2.1.</span> <span class="toc-text">1.1 三种方案对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-Redis%E5%AE%9E%E9%99%85%E7%AD%96%E7%95%A5%EF%BC%9A%E5%AE%9A%E6%9C%9F%E5%88%A0%E9%99%A4-%E6%83%B0%E6%80%A7%E5%88%A0%E9%99%A4"><span class="toc-number">1.2.2.</span> <span class="toc-text">1.2 Redis实际策略：定期删除 + 惰性删除</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%86%85%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5"><span class="toc-number">1.3.</span> <span class="toc-text">二、内存淘汰策略</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E8%A7%A6%E5%8F%91"><span class="toc-number">1.3.1.</span> <span class="toc-text">2.1 什么时候触发</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-8%E7%A7%8D%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5"><span class="toc-number">1.3.2.</span> <span class="toc-text">2.2 8种淘汰策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-LRU-vs-LFU"><span class="toc-number">1.3.3.</span> <span class="toc-text">2.3 LRU vs LFU</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E7%94%9F%E4%BA%A7%E9%85%8D%E7%BD%AE%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.4.</span> <span class="toc-text">三、生产配置建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%86%85%E5%AD%98%E9%85%8D%E7%BD%AE"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 内存配置</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E8%BF%87%E6%9C%9F%E7%AD%96%E7%95%A5%E9%85%8D%E7%BD%AE"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 过期策略配置</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%9D%A2%E8%AF%95%E7%9B%B4%E5%87%BB"><span class="toc-number">1.5.</span> <span class="toc-text">四、面试直击</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Q1%EF%BC%9ARedis%E7%9A%84%E8%BF%87%E6%9C%9F%E7%AD%96%E7%95%A5%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-number">1.5.1.</span> <span class="toc-text">Q1：Redis的过期策略是什么？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q2%EF%BC%9A%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%8F%AA%E7%94%A8%E5%AE%9A%E6%97%B6%E5%88%A0%E9%99%A4%EF%BC%9F"><span class="toc-number">1.5.2.</span> <span class="toc-text">Q2：为什么不只用定时删除？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q3%EF%BC%9A%E5%86%85%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5%E6%9C%89%E5%93%AA%E4%BA%9B%EF%BC%9F%E7%94%9F%E4%BA%A7%E4%B8%AD%E6%8E%A8%E8%8D%90%E5%93%AA%E4%B8%AA%EF%BC%9F"><span class="toc-number">1.5.3.</span> <span class="toc-text">Q3：内存淘汰策略有哪些？生产中推荐哪个？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q4%EF%BC%9ALRU%E5%92%8CLFU%E6%9C%89%E4%BB%80%E4%B9%88%E5%8C%BA%E5%88%AB%EF%BC%9F"><span class="toc-number">1.5.4.</span> <span class="toc-text">Q4：LRU和LFU有什么区别？</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:30:00.000Z" title="发表于 2026-05-26 21:30:00">2026-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/10/redis10-performance/" title="10 — Redis性能优化与最佳实践">10 — Redis性能优化与最佳实践</a><time datetime="2026-03-10T00:00:00.000Z" title="发表于 2026-03-10 08:00:00">2026-03-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/07/redis09-advanced-data-structures/" title="09 — Redis高级数据结构">09 — Redis高级数据结构</a><time datetime="2026-03-07T00:00:00.000Z" title="发表于 2026-03-07 08:00:00">2026-03-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/04/redis08-transaction-pipeline-lua/" title="08 — 事务、管道与Lua脚本">08 — 事务、管道与Lua脚本</a><time datetime="2026-03-04T00:00:00.000Z" title="发表于 2026-03-04 08:00:00">2026-03-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/01/redis07-expire-eviction/" title="07 — 过期策略与内存淘汰">07 — 过期策略与内存淘汰</a><time datetime="2026-03-01T00:00:00.000Z" title="发表于 2026-03-01 08:00:00">2026-03-01</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@19.1.3/dist/lazyload.iife.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

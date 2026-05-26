@@ -1,0 +1,919 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>03 — 主从架构与哨兵机制 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="主从架构与哨兵机制核心知识点速览   知识点 要点    主从复制 一主多从，主写从读，数据单向同步   全量复制 从节点首次连接&#x2F;断连重连，主节点生成RDB发给从   增量复制 断开重连后，只同步断连期间丢失的命令   复制偏移量 主从各自维护offset，用于判断数据一致性   复制积压缓冲区 主节点维护的环形缓冲区，存最近N字节写命令   哨兵机制 监控 + 自动故障转移 + 通知">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03 — 主从架构与哨兵机制">
+<meta property="og:url" content="https://chukui2005.github.io/2026/02/17/redis03-master-slave-sentinel/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="主从架构与哨兵机制核心知识点速览   知识点 要点    主从复制 一主多从，主写从读，数据单向同步   全量复制 从节点首次连接&#x2F;断连重连，主节点生成RDB发给从   增量复制 断开重连后，只同步断连期间丢失的命令   复制偏移量 主从各自维护offset，用于判断数据一致性   复制积压缓冲区 主节点维护的环形缓冲区，存最近N字节写命令   哨兵机制 监控 + 自动故障转移 + 通知">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-02-17T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-05-26T13:40:28.791Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="主从复制">
+<meta property="article:tag" content="哨兵">
+<meta property="article:tag" content="高可用">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "03 — 主从架构与哨兵机制",
+  "url": "https://chukui2005.github.io/2026/02/17/redis03-master-slave-sentinel/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-02-17T00:00:00.000Z",
+  "dateModified": "2026-05-26T13:40:28.791Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/02/17/redis03-master-slave-sentinel/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '03 — 主从架构与哨兵机制',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">03 — 主从架构与哨兵机制</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">03 — 主从架构与哨兵机制<a class="post-edit-link" href="null_posts/redis03-master-slave-sentinel.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-02-17T00:00:00.000Z" title="发表于 2026-02-17 08:00:00">2026-02-17</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-05-26T13:40:28.791Z" title="更新于 2026-05-26 21:40:28">2026-05-26</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/Redis/">Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>5分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-05-26 21:40:28&quot;}" hidden></div><h1 id="主从架构与哨兵机制"><a href="#主从架构与哨兵机制" class="headerlink" title="主从架构与哨兵机制"></a>主从架构与哨兵机制</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>主从复制</td>
+<td>一主多从，主写从读，数据单向同步</td>
+</tr>
+<tr>
+<td>全量复制</td>
+<td>从节点首次连接&#x2F;断连重连，主节点生成RDB发给从</td>
+</tr>
+<tr>
+<td>增量复制</td>
+<td>断开重连后，只同步断连期间丢失的命令</td>
+</tr>
+<tr>
+<td>复制偏移量</td>
+<td>主从各自维护offset，用于判断数据一致性</td>
+</tr>
+<tr>
+<td>复制积压缓冲区</td>
+<td>主节点维护的环形缓冲区，存最近N字节写命令</td>
+</tr>
+<tr>
+<td>哨兵机制</td>
+<td>监控 + 自动故障转移 + 通知</td>
+</tr>
+<tr>
+<td>哨兵选举</td>
+<td>Raft算法，超过半数哨兵同意才切换</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、主从架构"><a href="#一、主从架构" class="headerlink" title="一、主从架构"></a>一、主从架构</h2><h3 id="1-1-基本结构"><a href="#1-1-基本结构" class="headerlink" title="1.1 基本结构"></a>1.1 基本结构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Client（读）          Client（读）          Client（读）</span><br><span class="line">    ↑                    ↑                    ↑</span><br><span class="line">    ├────────┬───────────┴───────────┬────────┤</span><br><span class="line">    │        │                       │        │</span><br><span class="line">[Slave A]  [Slave B]            [Slave C]  [Slave D]</span><br><span class="line">    ↑        ↑                       ↑        ↑</span><br><span class="line">    └────────┴───────────┬───────────┴────────┘</span><br><span class="line">                         │</span><br><span class="line">                    [Master]</span><br><span class="line">                         │</span><br><span class="line">                    Client（写）</span><br></pre></td></tr></table></figure>
+
+<p><strong>规则：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 主节点负责写，从节点负责读（读写分离）</span><br><span class="line">② 数据从主节点同步到从节点（单向）</span><br><span class="line">③ 从节点可以再挂从节点（树状结构）</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-配置方式"><a href="#1-2-配置方式" class="headerlink" title="1.2 配置方式"></a>1.2 配置方式</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"># 从节点配置</span><br><span class="line">slaveof 192.168.1.100 6379    → 指定主节点IP和端口</span><br><span class="line"># 或者命令行</span><br><span class="line">SLAVEOF 192.168.1.100 6379</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="二、复制原理"><a href="#二、复制原理" class="headerlink" title="二、复制原理"></a>二、复制原理</h2><h3 id="2-1-全量复制流程"><a href="#2-1-全量复制流程" class="headerlink" title="2.1 全量复制流程"></a>2.1 全量复制流程</h3><p>从节点第一次连接主节点时触发。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">[从节点]                       [主节点]</span><br><span class="line">    │                              │</span><br><span class="line">    ├── SLAVEOF 192.168.x.x ──────→│</span><br><span class="line">    │                              │</span><br><span class="line">    │◄── PSYNC ? -1 ───────────────┤ 问：我的主节点是谁？</span><br><span class="line">    │                              │</span><br><span class="line">    │◄── +FULLRESYNC runid offset ─┤ 回：全量复制</span><br><span class="line">    │                              │</span><br><span class="line">    │         主节点BGSAVE生成RDB   │</span><br><span class="line">    │◄── 发送RDB文件 ───────────────┤</span><br><span class="line">    │     （加载RDB到内存）          │</span><br><span class="line">    │                              │</span><br><span class="line">    │◄── 发送缓冲区中的新命令 ──────┤ BGSAVE期间的写命令</span><br><span class="line">    │                              │</span><br><span class="line">    │   加载完成，正式开始同步       │</span><br></pre></td></tr></table></figure>
+
+<p><strong>全量复制耗时点：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① fork子进程生成RDB（耗时，内存大时明显）</span><br><span class="line">② 传输RDB文件（网络耗时，文件越大越慢）</span><br><span class="line">③ 从节点加载RDB（阻塞，加载期间不提供服务）</span><br></pre></td></tr></table></figure>
+
+<p>生产环境全量复制尽量在<strong>低峰期</strong>触发。</p>
+<h3 id="2-2-增量复制流程"><a href="#2-2-增量复制流程" class="headerlink" title="2.2 增量复制流程"></a>2.2 增量复制流程</h3><p>从节点断开重连后，只会同步断连期间丢失的命令。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">[从节点]                       [主节点]</span><br><span class="line">    │                              │</span><br><span class="line">    ├── PSYNC runid offset ───────→│ 带上之前的runid和offset</span><br><span class="line">    │                              │</span><br><span class="line">    │◄── +CONTINUE ────────────────┤ 回复：增量复制</span><br><span class="line">    │                              │</span><br><span class="line">    │◄── 发送断连期间的写命令 ──────┤ 从复制积压缓冲区读取</span><br><span class="line">    │                              │</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键限制：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">主节点的复制积压缓冲区大小是固定的（默认1MB）</span><br><span class="line">如果断连太久，丢失的命令超出缓冲区大小</span><br><span class="line">→ 降级为全量复制</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-复制积压缓冲区"><a href="#2-3-复制积压缓冲区" class="headerlink" title="2.3 复制积压缓冲区"></a>2.3 复制积压缓冲区</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">主节点维护一个环形缓冲区（ring buffer）</span><br><span class="line"></span><br><span class="line">大小：默认 repl-backlog-size 1MB</span><br><span class="line">      生产建议 50MB-100MB（根据断连时间估算）</span><br><span class="line">      公式：重连所需秒数 × 平均每秒写入字节量</span><br><span class="line"></span><br><span class="line">环形：写满了从头覆盖，保留最新的N字节</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-4-复制偏移量"><a href="#2-4-复制偏移量" class="headerlink" title="2.4 复制偏移量"></a>2.4 复制偏移量</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">主从各自维护一个offset：</span><br><span class="line">  主节点：每写一条命令，offset + 命令字节数</span><br><span class="line">  从节点：每收到一条命令，offset + 命令字节数</span><br><span class="line"></span><br><span class="line">如果主从的offset相同 → 数据一致</span><br><span class="line">如果不同 → 说明有数据没同步完</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、哨兵机制（Sentinel）"><a href="#三、哨兵机制（Sentinel）" class="headerlink" title="三、哨兵机制（Sentinel）"></a>三、哨兵机制（Sentinel）</h2><h3 id="3-1-哨兵解决了什么问题"><a href="#3-1-哨兵解决了什么问题" class="headerlink" title="3.1 哨兵解决了什么问题"></a>3.1 哨兵解决了什么问题</h3><p>主从架构下，如果主节点宕机了：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 写不可用（只有主能写）</span><br><span class="line">② 需要人工把某个从节点切换成主节点</span><br><span class="line">③ 需要改Client配置指向新的主节点</span><br></pre></td></tr></table></figure>
+
+<p><strong>哨兵就是自动做这件事的。</strong></p>
+<h3 id="3-2-哨兵的功能"><a href="#3-2-哨兵的功能" class="headerlink" title="3.2 哨兵的功能"></a>3.2 哨兵的功能</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 监控    → 不断检查主从节点是否正常</span><br><span class="line">② 自动故障转移 → 主挂了，自动选一个从变成主</span><br><span class="line">③ 通知    → 把新主节点信息通知给Client</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-哨兵集群"><a href="#3-3-哨兵集群" class="headerlink" title="3.3 哨兵集群"></a>3.3 哨兵集群</h3><p><strong>哨兵本身也是集群部署的</strong>（至少3个实例），防单点。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">[Sentinel A] ←→ [Sentinel B] ←→ [Sentinel C]</span><br><span class="line">    ↑                                   ↑</span><br><span class="line">    │        [Master]                    │</span><br><span class="line">    │        /       \                   │</span><br><span class="line">    │  [Slave A]   [Slave B]             │</span><br><span class="line">    └────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-4-主观下线-vs-客观下线"><a href="#3-4-主观下线-vs-客观下线" class="headerlink" title="3.4 主观下线 vs 客观下线"></a>3.4 主观下线 vs 客观下线</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">主观下线（SDOWN）：</span><br><span class="line">  一个哨兵发现某个节点ping不通了</span><br><span class="line">  标记为主观下线</span><br><span class="line"></span><br><span class="line">客观下线（ODOWN）：</span><br><span class="line">  多个哨兵（超过quorum数）都认为主节点挂了</span><br><span class="line">  才真正触发故障转移</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-5-故障转移流程"><a href="#3-5-故障转移流程" class="headerlink" title="3.5 故障转移流程"></a>3.5 故障转移流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">① 哨兵A发现主节点ping不通 → 标记为SDOWN</span><br><span class="line"></span><br><span class="line">② 哨兵A向其他哨兵询问：</span><br><span class="line">   &quot;主节点挂了，你们怎么看？&quot;</span><br><span class="line">   </span><br><span class="line">③ 如果回复的哨兵数 ≥ quorum → 主节点标记为ODOWN</span><br><span class="line"></span><br><span class="line">④ 开始选举Leader哨兵（Raft算法）：</span><br><span class="line">   - 每个哨兵都可以投票</span><br><span class="line">   - 获得半数以上票的成为Leader</span><br><span class="line">   - Leader负责执行故障转移</span><br><span class="line"></span><br><span class="line">⑤ Leader选出一个新主节点：</span><br><span class="line">   优先级规则（依次判断）：</span><br><span class="line">   a) 优先级最高的从节点（slave-priority）</span><br><span class="line">   b) 复制偏移量最大的（数据最全）</span><br><span class="line">   c) runid最小的</span><br><span class="line"></span><br><span class="line">⑥ 让其他从节点复制新主节点</span><br><span class="line"></span><br><span class="line">⑦ 旧主节点恢复后，变成新主节点的从节点</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-6-哨兵配置示例"><a href="#3-6-哨兵配置示例" class="headerlink" title="3.6 哨兵配置示例"></a>3.6 哨兵配置示例</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"># sentinel.conf</span><br><span class="line">sentinel monitor mymaster 127.0.0.1 6379 2</span><br><span class="line">sentinel down-after-milliseconds mymaster 30000</span><br><span class="line">sentinel parallel-syncs mymaster 1</span><br><span class="line">sentinel failover-timeout mymaster 180000</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">sentinel monitor mymaster IP PORT quorum</span><br><span class="line">   → quorum=2：至少2个哨兵同意才切换</span><br><span class="line"></span><br><span class="line">down-after-milliseconds 30000</span><br><span class="line">   → 30秒ping不通就认为挂了</span><br><span class="line"></span><br><span class="line">parallel-syncs 1</span><br><span class="line">   → 新主节点上线后，每次让1个从节点同步</span><br><span class="line">   → 防止所有从节点同时全量复制压垮主节点</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="四、面试直击"><a href="#四、面试直击" class="headerlink" title="四、面试直击"></a>四、面试直击</h2><h3 id="Q1：全量复制和增量复制的区别？"><a href="#Q1：全量复制和增量复制的区别？" class="headerlink" title="Q1：全量复制和增量复制的区别？"></a>Q1：全量复制和增量复制的区别？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">全量复制：从节点首次连接，主节点生成RDB全量同步</span><br><span class="line">增量复制：断连重连，只同步丢失的部分</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q2：复制积压缓冲区有什么用？太大了会怎样？"><a href="#Q2：复制积压缓冲区有什么用？太大了会怎样？" class="headerlink" title="Q2：复制积压缓冲区有什么用？太大了会怎样？"></a>Q2：复制积压缓冲区有什么用？太大了会怎样？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">① 存储最近N字节的写命令</span><br><span class="line">② 从节点断连重连时，如果丢失的命令还在缓冲区中</span><br><span class="line">    → 增量复制（快）</span><br><span class="line">③ 如果丢失的命令被覆盖了</span><br><span class="line">    → 降级为全量复制（慢）</span><br><span class="line"></span><br><span class="line">缓冲区越大，容忍断开的时间越长</span><br><span class="line">但占用主节点内存也越多</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q3：哨兵怎么判断主节点挂了？"><a href="#Q3：哨兵怎么判断主节点挂了？" class="headerlink" title="Q3：哨兵怎么判断主节点挂了？"></a>Q3：哨兵怎么判断主节点挂了？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">两步确认：</span><br><span class="line">① 一个哨兵ping不通 → 主观下线（SDOWN）</span><br><span class="line">② 超过quorum个哨兵都确认 → 客观下线（ODOWN）</span><br><span class="line">    → 触发故障转移</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q4：新主节点怎么选出来的？"><a href="#Q4：新主节点怎么选出来的？" class="headerlink" title="Q4：新主节点怎么选出来的？"></a>Q4：新主节点怎么选出来的？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Leader哨兵按优先级选择：</span><br><span class="line">① slave-priority 越小优先级越高</span><br><span class="line">② 复制偏移量越大（数据越全）</span><br><span class="line">③ runid 越小</span><br></pre></td></tr></table></figure>
+
+<h3 id="Q5：哨兵本身挂了怎么办？"><a href="#Q5：哨兵本身挂了怎么办？" class="headerlink" title="Q5：哨兵本身挂了怎么办？"></a>Q5：哨兵本身挂了怎么办？</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">哨兵也是集群部署（至少3个实例）</span><br><span class="line">挂了一个不影响整体功能</span><br><span class="line">只要还有半数以上哨兵存活就能工作</span><br></pre></td></tr></table></figure>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/02/17/redis03-master-slave-sentinel/">https://chukui2005.github.io/2026/02/17/redis03-master-slave-sentinel/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Redis/">Redis</a><a class="post-meta__tags" href="/blog/tags/%E4%B8%BB%E4%BB%8E%E5%A4%8D%E5%88%B6/">主从复制</a><a class="post-meta__tags" href="/blog/tags/%E5%93%A8%E5%85%B5/">哨兵</a><a class="post-meta__tags" href="/blog/tags/%E9%AB%98%E5%8F%AF%E7%94%A8/">高可用</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/02/20/redis04-cluster/" title="04 — Redis集群（Cluster）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">04 — Redis集群（Cluster）</div></div><div class="info-2"><div class="info-item-1">Redis集群（Cluster）核心知识点速览   知识点 要点    为什么需要集群 主从+哨兵解决高可用，但不解决容量和性能瓶颈   数据分片 16384个哈希槽，CRC16(key) % 16384 决定分配到哪个节点   节点通信 Gossip协议，节点间不断交换状态信息   去中心化 没有中心节点，每个节点都知道全集群状态   高可用 集群内主从切换，主挂了从顶上   限制 不支持多key操作（不在同一个slot）、事务   客户端路由 smart client &#x2F; proxy（Twemproxy&#x2F;Codis）    一、为什么需要集群主从+哨兵方案的问题： 123① 单机容量有限（内存上限 = 最⼤的那台机器的内存）② 读写性能有上限（单机10W QPS，不够了怎么办）③ 所有写操作都在一个主节点上（仍然是单点写入）  集群（Cluster）方案： 123把数据自动分片到多个节点上每个节点负责一部分数据容量和性能可以水平扩展   二、数据分片：哈希槽2.1 槽（Slot）的概念Redis Cluster固定划分 16384个哈希槽。 12345槽的...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/14/redis02-persistence/" title="02 — Redis持久化：RDB与AOF"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">02 — Redis持久化：RDB与AOF</div></div><div class="info-2"><div class="info-item-1">Redis持久化：RDB与AOF核心知识点速览   知识点 要点    RDB 快照持久化，定时全量备份，二进制文件   AOF 追加日志持久化，记录写命令，文本文件   混合持久化 Redis 4.0+，RDB做全量 + AOF做增量   RDB触发 save（同步阻塞）&#x2F; bgsave（fork子进程）   AOF写回策略 always &#x2F; everysec（推荐）&#x2F; no   AOF重写 BGREWRITEAOF，压缩AOF文件体积   选型建议 两者都用（混合持久化），兼顾性能和数据安全    一、为什么需要持久化Redis数据在内存里，一旦进程退出或服务器宕机，内存数据全部丢失。 持久化就是把内存中的数据保存到硬盘，下次启动时恢复。  二、RDB（Redis DataBase）2.1 原理RDB是快照持久化，把某个时间点的全量数据保存到一个二进制文件（dump.rdb）。 就像拍照一样，拍的是那一刻的状态。 2.2 触发方式手动触发： 12345SAVE     → 同步阻塞，Redis主进程直接生成RDB           （生产环境不...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/02/23/redis05-cache-design/" title="05 — 缓存设计：穿透、击穿、雪崩"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-23</div><div class="info-item-2">05 — 缓存设计：穿透、击穿、雪崩</div></div><div class="info-2"><div class="info-item-1">缓存设计：穿透、击穿、雪崩核心知识点速览   知识点 要点    缓存穿透 查不存在的数据，绕过缓存直接查DB   缓存击穿 热点key过期，瞬间大量请求打到DB   缓存雪崩 大量key同时过期 &#x2F; Redis宕机，DB被打垮   穿透方案 布隆过滤器 &#x2F; 缓存空值   击穿方案 永不过期 + 异步刷新 &#x2F; 互斥锁   雪崩方案 过期时间加随机值 &#x2F; 多级缓存 &#x2F; 限流降级   缓存一致性 先更新DB再删缓存（旁路缓存）    一、缓存穿透1.1 什么是缓存穿透12345678910查询一个不存在的数据：用户请求 → 查缓存 → 没有（该key不存在）         → 查DB  → 也没有         → 不写缓存         → 下次再查，又走一遍恶意请求频繁查询不存在的ID→ 每次都会打到DB→ DB可能被压垮  本质： 缓存中没有，DB中也没有，所以每次都穿透缓存直接查DB。 1.2 解决方案一：缓存空值12345678910111213查询DB没查到时，也写一个空值到缓存步骤：① 查缓存 → 没有② 查DB ...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/14/redis02-persistence/" title="02 — Redis持久化：RDB与AOF"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-14</div><div class="info-item-2">02 — Redis持久化：RDB与AOF</div></div><div class="info-2"><div class="info-item-1">Redis持久化：RDB与AOF核心知识点速览   知识点 要点    RDB 快照持久化，定时全量备份，二进制文件   AOF 追加日志持久化，记录写命令，文本文件   混合持久化 Redis 4.0+，RDB做全量 + AOF做增量   RDB触发 save（同步阻塞）&#x2F; bgsave（fork子进程）   AOF写回策略 always &#x2F; everysec（推荐）&#x2F; no   AOF重写 BGREWRITEAOF，压缩AOF文件体积   选型建议 两者都用（混合持久化），兼顾性能和数据安全    一、为什么需要持久化Redis数据在内存里，一旦进程退出或服务器宕机，内存数据全部丢失。 持久化就是把内存中的数据保存到硬盘，下次启动时恢复。  二、RDB（Redis DataBase）2.1 原理RDB是快照持久化，把某个时间点的全量数据保存到一个二进制文件（dump.rdb）。 就像拍照一样，拍的是那一刻的状态。 2.2 触发方式手动触发： 12345SAVE     → 同步阻塞，Redis主进程直接生成RDB           （生产环境不...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/26/redis06-distributed-lock/" title="06 — Redis分布式锁"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-26</div><div class="info-item-2">06 — Redis分布式锁</div></div><div class="info-2"><div class="info-item-1">Redis分布式锁核心知识点速览   知识点 要点    为什么需要分布式锁 多进程&#x2F;多服务互斥访问共享资源   基本实现 SETNX + EXPIRE（分开两条命令有问题）   原子实现 SET key value NX EX 30（一条命令搞定）   锁超时 防止获得锁的进程挂了，锁永远不会释放   锁续期（看门狗） Redisson实现，锁快过期时自动续期   可重入 同一个线程可以多次获得同一把锁   RedLock Redis官方多节点锁方案（生产不太用）   最佳实践 Redisson框架，开箱即用    一、为什么需要分布式锁单体架构： 12synchronized / Lock 就够用了同一个JVM内的线程互斥  分布式架构： 12345678多个服务实例同时操作共享资源服务A（实例1） → Redis扣库存服务A（实例2） → Redis扣库存服务B（实例3） → Redis扣库存synchronized只能锁住一个JVM内的线程跨JVM需要分布式锁   二、锁的基本实现演变2.1 第一版：SETNX + EXPIRE（有坑）123456SETNX l...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/01/redis07-expire-eviction/" title="07 — 过期策略与内存淘汰"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-01</div><div class="info-item-2">07 — 过期策略与内存淘汰</div></div><div class="info-2"><div class="info-item-1">过期策略与内存淘汰核心知识点速览   知识点 要点    过期策略 定期删除 + 惰性删除（不是定时扫描）   定期删除 每100ms随机抽查20个过期key，删掉过期的   惰性删除 key被访问时才检查是否过期，过期则删   定时删除 每个过期key都启动一个定时器（不采用，太耗CPU）   内存淘汰 内存满了时，怎么腾出空间   8种淘汰策略 noeviction &#x2F; allkeys-lru &#x2F; volatile-lru &#x2F; allkeys-lfu &#x2F; volatile-lfu &#x2F; allkeys-random &#x2F; volatile-random &#x2F; volatile-ttl   生产推荐 allkeys-lru（最近最少使用的key优先淘汰）   LRU vs LFU LRU看最近一次访问，LFU看访问频率    一、过期策略1.1 三种方案对比12345678910111213141516定时删除（不用）：  每个设置了过期时间的key都创建一个定时器  到时间就删  优点：内存最友好（到点就删）  ...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/10/redis10-performance/" title="10 — Redis性能优化与最佳实践"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-10</div><div class="info-item-2">10 — Redis性能优化与最佳实践</div></div><div class="info-2"><div class="info-item-1">Redis性能优化与最佳实践核心知识点速览   知识点 要点    Big Key 一个key的数据量过大（&gt;10KB）→ 慢查询&#x2F;阻塞   Hot Key 一个key被大量并发访问 → 单节点瓶颈   慢查询 执行时间超过slowlog-log-slower-than的命令   性能指标 QPS &#x2F; 延迟 &#x2F; 内存使用率 &#x2F; 命中率   优化原则 减少RTT &#x2F; 避免大key &#x2F; 选对数据结构   雪崩预防 过期时间加随机值 &#x2F; 多级缓存 &#x2F; 限流   线上问题 排查思路：慢查询 → BigKey → 热Key → 内存    一、Big Key（大Key）问题1.1 什么是Big Key1234567String类型：  value &gt; 10KB 就算大key  value &gt; 100MB 就是超大key集合类型（List/Hash/Set/ZSet）：  元素数量 &gt; 5000 算大key  元素数量 &gt; 10000 建议拆分  1.2 Big Key的危害1234...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/07/redis09-advanced-data-structures/" title="09 — Redis高级数据结构"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-07</div><div class="info-item-2">09 — Redis高级数据结构</div></div><div class="info-2"><div class="info-item-1">Redis高级数据结构核心知识点速览   知识点 要点    Bitmap 位图，用bit位存数据，适合海量布尔值统计   HyperLogLog 基数统计，12KB内存统计上亿不同元素   Geo 地理位置，经纬度存+距离计算   BloomFilter 布隆过滤器，判断元素是否存在（可能有误判）   布隆过滤器原理 多个hash函数映射到位图，说不存在就一定不存在    一、Bitmap（位图）1.1 原理Bitmap不是独立的数据类型，底层是String（最大512MB）。 每个bit位可以存0或1。8个bit &#x3D; 1个字节。 1234567一个字节可以存8个bit：bit位：  0  1  0  0  0  0  0  1       ↑                     ↑      第0位                 第7位1个String可以存 512MB × 8 = 40亿+ 个bit  1.2 常用命令1234SETBIT key offset value    → 设置某个bit的值（0或1）GETBIT key offset       ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">38</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">138</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E4%B8%BB%E4%BB%8E%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%93%A8%E5%85%B5%E6%9C%BA%E5%88%B6"><span class="toc-number">1.</span> <span class="toc-text">主从架构与哨兵机制</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%B8%BB%E4%BB%8E%E6%9E%B6%E6%9E%84"><span class="toc-number">1.2.</span> <span class="toc-text">一、主从架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E5%9F%BA%E6%9C%AC%E7%BB%93%E6%9E%84"><span class="toc-number">1.2.1.</span> <span class="toc-text">1.1 基本结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E9%85%8D%E7%BD%AE%E6%96%B9%E5%BC%8F"><span class="toc-number">1.2.2.</span> <span class="toc-text">1.2 配置方式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%A4%8D%E5%88%B6%E5%8E%9F%E7%90%86"><span class="toc-number">1.3.</span> <span class="toc-text">二、复制原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E5%85%A8%E9%87%8F%E5%A4%8D%E5%88%B6%E6%B5%81%E7%A8%8B"><span class="toc-number">1.3.1.</span> <span class="toc-text">2.1 全量复制流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E5%A2%9E%E9%87%8F%E5%A4%8D%E5%88%B6%E6%B5%81%E7%A8%8B"><span class="toc-number">1.3.2.</span> <span class="toc-text">2.2 增量复制流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E5%A4%8D%E5%88%B6%E7%A7%AF%E5%8E%8B%E7%BC%93%E5%86%B2%E5%8C%BA"><span class="toc-number">1.3.3.</span> <span class="toc-text">2.3 复制积压缓冲区</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-%E5%A4%8D%E5%88%B6%E5%81%8F%E7%A7%BB%E9%87%8F"><span class="toc-number">1.3.4.</span> <span class="toc-text">2.4 复制偏移量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E5%93%A8%E5%85%B5%E6%9C%BA%E5%88%B6%EF%BC%88Sentinel%EF%BC%89"><span class="toc-number">1.4.</span> <span class="toc-text">三、哨兵机制（Sentinel）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%93%A8%E5%85%B5%E8%A7%A3%E5%86%B3%E4%BA%86%E4%BB%80%E4%B9%88%E9%97%AE%E9%A2%98"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 哨兵解决了什么问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%93%A8%E5%85%B5%E7%9A%84%E5%8A%9F%E8%83%BD"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 哨兵的功能</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E5%93%A8%E5%85%B5%E9%9B%86%E7%BE%A4"><span class="toc-number">1.4.3.</span> <span class="toc-text">3.3 哨兵集群</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E4%B8%BB%E8%A7%82%E4%B8%8B%E7%BA%BF-vs-%E5%AE%A2%E8%A7%82%E4%B8%8B%E7%BA%BF"><span class="toc-number">1.4.4.</span> <span class="toc-text">3.4 主观下线 vs 客观下线</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-%E6%95%85%E9%9A%9C%E8%BD%AC%E7%A7%BB%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.5.</span> <span class="toc-text">3.5 故障转移流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-6-%E5%93%A8%E5%85%B5%E9%85%8D%E7%BD%AE%E7%A4%BA%E4%BE%8B"><span class="toc-number">1.4.6.</span> <span class="toc-text">3.6 哨兵配置示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%9D%A2%E8%AF%95%E7%9B%B4%E5%87%BB"><span class="toc-number">1.5.</span> <span class="toc-text">四、面试直击</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Q1%EF%BC%9A%E5%85%A8%E9%87%8F%E5%A4%8D%E5%88%B6%E5%92%8C%E5%A2%9E%E9%87%8F%E5%A4%8D%E5%88%B6%E7%9A%84%E5%8C%BA%E5%88%AB%EF%BC%9F"><span class="toc-number">1.5.1.</span> <span class="toc-text">Q1：全量复制和增量复制的区别？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q2%EF%BC%9A%E5%A4%8D%E5%88%B6%E7%A7%AF%E5%8E%8B%E7%BC%93%E5%86%B2%E5%8C%BA%E6%9C%89%E4%BB%80%E4%B9%88%E7%94%A8%EF%BC%9F%E5%A4%AA%E5%A4%A7%E4%BA%86%E4%BC%9A%E6%80%8E%E6%A0%B7%EF%BC%9F"><span class="toc-number">1.5.2.</span> <span class="toc-text">Q2：复制积压缓冲区有什么用？太大了会怎样？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q3%EF%BC%9A%E5%93%A8%E5%85%B5%E6%80%8E%E4%B9%88%E5%88%A4%E6%96%AD%E4%B8%BB%E8%8A%82%E7%82%B9%E6%8C%82%E4%BA%86%EF%BC%9F"><span class="toc-number">1.5.3.</span> <span class="toc-text">Q3：哨兵怎么判断主节点挂了？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q4%EF%BC%9A%E6%96%B0%E4%B8%BB%E8%8A%82%E7%82%B9%E6%80%8E%E4%B9%88%E9%80%89%E5%87%BA%E6%9D%A5%E7%9A%84%EF%BC%9F"><span class="toc-number">1.5.4.</span> <span class="toc-text">Q4：新主节点怎么选出来的？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Q5%EF%BC%9A%E5%93%A8%E5%85%B5%E6%9C%AC%E8%BA%AB%E6%8C%82%E4%BA%86%E6%80%8E%E4%B9%88%E5%8A%9E%EF%BC%9F"><span class="toc-number">1.5.5.</span> <span class="toc-text">Q5：哨兵本身挂了怎么办？</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:30:00.000Z" title="发表于 2026-05-26 21:30:00">2026-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/10/redis10-performance/" title="10 — Redis性能优化与最佳实践">10 — Redis性能优化与最佳实践</a><time datetime="2026-03-10T00:00:00.000Z" title="发表于 2026-03-10 08:00:00">2026-03-10</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/07/redis09-advanced-data-structures/" title="09 — Redis高级数据结构">09 — Redis高级数据结构</a><time datetime="2026-03-07T00:00:00.000Z" title="发表于 2026-03-07 08:00:00">2026-03-07</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/04/redis08-transaction-pipeline-lua/" title="08 — 事务、管道与Lua脚本">08 — 事务、管道与Lua脚本</a><time datetime="2026-03-04T00:00:00.000Z" title="发表于 2026-03-04 08:00:00">2026-03-04</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/03/01/redis07-expire-eviction/" title="07 — 过期策略与内存淘汰">07 — 过期策略与内存淘汰</a><time datetime="2026-03-01T00:00:00.000Z" title="发表于 2026-03-01 08:00:00">2026-03-01</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@19.1.3/dist/lazyload.iife.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
