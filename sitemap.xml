@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://chukui2005.github.io/2026/06/08/kafka01-basics/</loc>
+    <loc>https://chukui2005.github.io/2026/03/22/kafka01-basics/</loc>
     
     <lastmod>2026-06-08</lastmod>
     
@@ -11,7 +11,7 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/2026/06/08/kafka02-reliability/</loc>
+    <loc>https://chukui2005.github.io/2026/03/25/kafka02-reliability/</loc>
     
     <lastmod>2026-06-08</lastmod>
     
@@ -20,7 +20,7 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/2026/06/08/kafka03-advanced/</loc>
+    <loc>https://chukui2005.github.io/2026/03/28/kafka03-advanced/</loc>
     
     <lastmod>2026-06-08</lastmod>
     
@@ -29,7 +29,7 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/2026/06/08/mq02-rabbitmq-reliability/</loc>
+    <loc>https://chukui2005.github.io/2026/03/13/mq01-rabbitmq-basics/</loc>
     
     <lastmod>2026-06-08</lastmod>
     
@@ -38,7 +38,7 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/2026/06/08/mq03-rabbitmq-advanced/</loc>
+    <loc>https://chukui2005.github.io/2026/03/16/mq02-rabbitmq-reliability/</loc>
     
     <lastmod>2026-06-08</lastmod>
     
@@ -47,7 +47,7 @@
   </url>
   
   <url>
-    <loc>https://chukui2005.github.io/2026/06/08/mq01-rabbitmq-basics/</loc>
+    <loc>https://chukui2005.github.io/2026/03/19/mq03-rabbitmq-advanced/</loc>
     
     <lastmod>2026-06-08</lastmod>
     

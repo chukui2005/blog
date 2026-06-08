@@ -1,9 +1,9 @@
-https://chukui2005.github.io/2026/06/08/kafka01-basics/
-https://chukui2005.github.io/2026/06/08/kafka02-reliability/
-https://chukui2005.github.io/2026/06/08/kafka03-advanced/
-https://chukui2005.github.io/2026/06/08/mq02-rabbitmq-reliability/
-https://chukui2005.github.io/2026/06/08/mq03-rabbitmq-advanced/
-https://chukui2005.github.io/2026/06/08/mq01-rabbitmq-basics/
+https://chukui2005.github.io/2026/03/22/kafka01-basics/
+https://chukui2005.github.io/2026/03/25/kafka02-reliability/
+https://chukui2005.github.io/2026/03/28/kafka03-advanced/
+https://chukui2005.github.io/2026/03/13/mq01-rabbitmq-basics/
+https://chukui2005.github.io/2026/03/16/mq02-rabbitmq-reliability/
+https://chukui2005.github.io/2026/03/19/mq03-rabbitmq-advanced/
 https://chukui2005.github.io/2026/02/11/redis01-basics/
 https://chukui2005.github.io/2026/02/14/redis02-persistence/
 https://chukui2005.github.io/2026/02/17/redis03-master-slave-sentinel/
