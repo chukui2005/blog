@@ -1,0 +1,1058 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>01 — Milvus向量数据库：AI时代的检索基础设施 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Milvus向量数据库核心知识点速览   知识点 要点    Milvus是什么 开源分布式向量数据库，专为AI&#x2F;大模型设计   为什么需要 向量检索（相似度搜索）是RAG的核心基础设施   核心概念 Collection &#x2F; Field &#x2F; Vector Index &#x2F; Partition   索引类型 HNSW（图）&#x2F; IVF（倒排）&amp;#x2F">
+<meta property="og:type" content="article">
+<meta property="og:title" content="01 — Milvus向量数据库：AI时代的检索基础设施">
+<meta property="og:url" content="https://chukui2005.github.io/2026/05/03/milvus01-basics/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="Milvus向量数据库核心知识点速览   知识点 要点    Milvus是什么 开源分布式向量数据库，专为AI&#x2F;大模型设计   为什么需要 向量检索（相似度搜索）是RAG的核心基础设施   核心概念 Collection &#x2F; Field &#x2F; Vector Index &#x2F; Partition   索引类型 HNSW（图）&#x2F; IVF（倒排）&amp;#x2F">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-05-03T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-08-05T03:29:12.419Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="Milvus">
+<meta property="article:tag" content="向量数据库">
+<meta property="article:tag" content="RAG">
+<meta property="article:tag" content="大模型">
+<meta property="article:tag" content="相似度检索">
+<meta property="article:tag" content="HNSW">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "01 — Milvus向量数据库：AI时代的检索基础设施",
+  "url": "https://chukui2005.github.io/2026/05/03/milvus01-basics/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-05-03T00:00:00.000Z",
+  "dateModified": "2026-08-05T03:29:12.419Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/05/03/milvus01-basics/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '01 — Milvus向量数据库：AI时代的检索基础设施',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">01 — Milvus向量数据库：AI时代的检索基础设施</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">01 — Milvus向量数据库：AI时代的检索基础设施<a class="post-edit-link" href="null_posts/milvus01-basics.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-05-03T00:00:00.000Z" title="发表于 2026-05-03 08:00:00">2026-05-03</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-05T03:29:12.419Z" title="更新于 2026-08-05 11:29:12">2026-08-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93/">向量数据库</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.7k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>6分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-08-05 11:29:12&quot;}" hidden></div><h1 id="Milvus向量数据库"><a href="#Milvus向量数据库" class="headerlink" title="Milvus向量数据库"></a>Milvus向量数据库</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Milvus是什么</td>
+<td>开源分布式向量数据库，专为AI&#x2F;大模型设计</td>
+</tr>
+<tr>
+<td>为什么需要</td>
+<td>向量检索（相似度搜索）是RAG的核心基础设施</td>
+</tr>
+<tr>
+<td>核心概念</td>
+<td>Collection &#x2F; Field &#x2F; Vector Index &#x2F; Partition</td>
+</tr>
+<tr>
+<td>索引类型</td>
+<td>HNSW（图）&#x2F; IVF（倒排）&#x2F; 标量索引</td>
+</tr>
+<tr>
+<td>相似度度量</td>
+<td>L2欧氏 &#x2F; 内积IP &#x2F; 余弦相似度</td>
+</tr>
+<tr>
+<td>应用场景</td>
+<td>RAG知识库、语义搜索、推荐、去重</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、为什么需要向量数据库"><a href="#一、为什么需要向量数据库" class="headerlink" title="一、为什么需要向量数据库"></a>一、为什么需要向量数据库</h2><h3 id="1-1-从关键词搜索到语义搜索"><a href="#1-1-从关键词搜索到语义搜索" class="headerlink" title="1.1 从关键词搜索到语义搜索"></a>1.1 从关键词搜索到语义搜索</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">传统搜索（ES倒排索引）：</span><br><span class="line">    用户搜&quot;手机&quot; → 匹配包含&quot;手机&quot;这个词的文档</span><br><span class="line">    搜&quot;苹果&quot; → 匹配不到&quot;iPhone&quot;（词面不匹配）</span><br><span class="line"></span><br><span class="line">向量检索（语义搜索）：</span><br><span class="line">    文本 → Embedding模型 → 向量（如768/1024维数字数组）</span><br><span class="line">    &quot;苹果&quot; → [0.12, 0.87, ...]</span><br><span class="line">    &quot;iPhone&quot; → [0.13, 0.85, ...]  ← 语义相近，向量距离近</span><br><span class="line">    搜索 = 找向量距离最近的记录</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-RAG（检索增强生成）链路"><a href="#1-2-RAG（检索增强生成）链路" class="headerlink" title="1.2 RAG（检索增强生成）链路"></a>1.2 RAG（检索增强生成）链路</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">RAG = 大模型 + 知识库检索</span><br><span class="line"></span><br><span class="line">① 离线：文档 → 切片 → Embedding向量化 → 存入Milvus</span><br><span class="line">② 在线：用户提问 → 向量化 → Milvus检索最相似的知识片段</span><br><span class="line">         → 片段 + 问题 拼进Prompt → 大模型生成回答</span><br><span class="line"></span><br><span class="line">价值：</span><br><span class="line">    - 解决大模型&quot;知识过时/幻觉&quot;问题</span><br><span class="line">    - 企业私有知识库问答（不训练模型，成本低）</span><br><span class="line">    - 可解释：回答附带检索来源</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>💡 简历亮点：用户的「AI-Agent知识库助手（Spring AI + RAG + MCP）」项目正是这个架构 —— Spring AI 负责编排，Milvus 负责向量检索，MCP 连接外部工具。</p>
+</blockquote>
+<hr>
+<h2 id="二、Milvus-核心概念"><a href="#二、Milvus-核心概念" class="headerlink" title="二、Milvus 核心概念"></a>二、Milvus 核心概念</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Collection（集合）≈ MySQL的表</span><br><span class="line">    ├── Field（字段）≈ 列</span><br><span class="line">    │     ├── 标量字段：id、title、content（存原文）</span><br><span class="line">    │     └── 向量字段：embedding（FLOAT_VECTOR，1024维）</span><br><span class="line">    ├── Partition（分区）≈ 分表，按业务隔离</span><br><span class="line">    ├── Shard（分片）≈ 水平扩展</span><br><span class="line">    └── Index（索引）≈ 加速向量检索</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>类比MySQL</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Collection</td>
+<td>Table</td>
+<td>一组数据的集合</td>
+</tr>
+<tr>
+<td>Field</td>
+<td>Column</td>
+<td>标量字段 + 向量字段</td>
+</tr>
+<tr>
+<td>Partition</td>
+<td>分表</td>
+<td>按租户&#x2F;日期分区，检索可限定分区</td>
+</tr>
+<tr>
+<td>Index</td>
+<td>索引</td>
+<td>向量索引（HNSW&#x2F;IVF等）</td>
+</tr>
+<tr>
+<td>Entity</td>
+<td>Row</td>
+<td>一条数据（标量+向量）</td>
+</tr>
+</tbody></table>
+<h3 id="建表示例"><a href="#建表示例" class="headerlink" title="建表示例"></a>建表示例</h3><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> pymilvus <span class="keyword">import</span> CollectionSchema, FieldSchema, DataType</span><br><span class="line"></span><br><span class="line">fields = [</span><br><span class="line">    FieldSchema(name=<span class="string">&quot;id&quot;</span>, dtype=DataType.INT64, is_primary=<span class="literal">True</span>),</span><br><span class="line">    FieldSchema(name=<span class="string">&quot;title&quot;</span>, dtype=DataType.VARCHAR, max_length=<span class="number">256</span>),</span><br><span class="line">    FieldSchema(name=<span class="string">&quot;content&quot;</span>, dtype=DataType.VARCHAR, max_length=<span class="number">8192</span>),</span><br><span class="line">    FieldSchema(name=<span class="string">&quot;embedding&quot;</span>, dtype=DataType.FLOAT_VECTOR, dim=<span class="number">1024</span>),</span><br><span class="line">]</span><br><span class="line">schema = CollectionSchema(fields, description=<span class="string">&quot;知识库文档&quot;</span>)</span><br><span class="line">collection = Collection(<span class="string">&quot;kb_docs&quot;</span>, schema)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="三、写入与检索流程"><a href="#三、写入与检索流程" class="headerlink" title="三、写入与检索流程"></a>三、写入与检索流程</h2><h3 id="3-1-写入流程"><a href="#3-1-写入流程" class="headerlink" title="3.1 写入流程"></a>3.1 写入流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">文档 → 切片(Chunk，如按500字) → Embedding模型向量化 → 批量插入Milvus</span><br><span class="line">    → 构建向量索引（异步，后台任务）</span><br><span class="line"></span><br><span class="line">切片策略（影响检索质量）：</span><br><span class="line">    - 按段落/标题切分，保持语义完整</span><br><span class="line">    - 重叠切片（overlap 50~100字）避免切断语义</span><br><span class="line">    - 太短信息量不足，太长检索精度下降</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-检索流程（ANN近似最近邻）"><a href="#3-2-检索流程（ANN近似最近邻）" class="headerlink" title="3.2 检索流程（ANN近似最近邻）"></a>3.2 检索流程（ANN近似最近邻）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">用户问题 → Embedding向量化 → 在Collection中搜索TopK最相似向量</span><br><span class="line">    → 返回相似度分数 + 对应原文 → 拼Prompt</span><br><span class="line"></span><br><span class="line">搜索参数：</span><br><span class="line">    top_k: 返回最相似的K条</span><br><span class="line">    metric_type: 距离度量方式</span><br><span class="line">    params: 索引搜索参数（如HNSW的ef）</span><br><span class="line">    filter: 标量过滤（如按部门/时间过滤后再向量检索）</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">collection.load()  <span class="comment"># 加载到内存/显存</span></span><br><span class="line">results = collection.search(</span><br><span class="line">    data=[question_vector],</span><br><span class="line">    anns_field=<span class="string">&quot;embedding&quot;</span>,</span><br><span class="line">    param=&#123;<span class="string">&quot;metric_type&quot;</span>: <span class="string">&quot;COSINE&quot;</span>, <span class="string">&quot;params&quot;</span>: &#123;<span class="string">&quot;ef&quot;</span>: <span class="number">64</span>&#125;&#125;,</span><br><span class="line">    limit=<span class="number">5</span>,               <span class="comment"># Top5</span></span><br><span class="line">    output_fields=[<span class="string">&quot;title&quot;</span>, <span class="string">&quot;content&quot;</span>],   <span class="comment"># 返回原文</span></span><br><span class="line">    expr=<span class="string">&quot;dept == &#x27;tech&#x27;&quot;</span>, <span class="comment"># 标量过滤</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="四、索引与相似度度量"><a href="#四、索引与相似度度量" class="headerlink" title="四、索引与相似度度量"></a>四、索引与相似度度量</h2><h3 id="4-1-向量索引类型"><a href="#4-1-向量索引类型" class="headerlink" title="4.1 向量索引类型"></a>4.1 向量索引类型</h3><table>
+<thead>
+<tr>
+<th>索引</th>
+<th>原理</th>
+<th>特点</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>HNSW</strong>（分层可导航小世界图）</td>
+<td>多层图结构，跳表式搜索</td>
+<td>召回率高、查询快、内存占用大</td>
+<td>通用推荐</td>
+</tr>
+<tr>
+<td>IVF_FLAT</td>
+<td>聚类倒排，先聚类再暴力搜索</td>
+<td>省内存，召回略低</td>
+<td>大数据量</td>
+</tr>
+<tr>
+<td>IVF_PQ</td>
+<td>乘积量化压缩向量</td>
+<td>极省内存，精度有损</td>
+<td>超大规模</td>
+</tr>
+<tr>
+<td>标量索引</td>
+<td>倒排索引（对普通字段）</td>
+<td>加速filter</td>
+<td>标量过滤</td>
+</tr>
+</tbody></table>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">选择建议：</span><br><span class="line">    百万级以内 → HNSW（精度与速度最佳）</span><br><span class="line">    千万级+ → IVF_PQ（内存优先）</span><br><span class="line">    混合查询多 → HNSW + 标量索引（filter）</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-三种距离度量"><a href="#4-2-三种距离度量" class="headerlink" title="4.2 三种距离度量"></a>4.2 三种距离度量</h3><table>
+<thead>
+<tr>
+<th>度量</th>
+<th>公式含义</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>L2（欧氏距离）</td>
+<td>数值差异越小越相似</td>
+<td>数值特征</td>
+</tr>
+<tr>
+<td>IP（内积）</td>
+<td>越大越相似</td>
+<td>未归一化向量</td>
+</tr>
+<tr>
+<td>COSINE（余弦）</td>
+<td>夹角越小越相似，与向量长度无关</td>
+<td><strong>文本语义检索（推荐）</strong></td>
+</tr>
+</tbody></table>
+<blockquote>
+<p><strong>实践</strong>：文本 Embedding 一般先归一化，此时 IP 与 COSINE 等价；中文语义检索常用 COSINE。</p>
+</blockquote>
+<hr>
+<h2 id="五、部署与架构"><a href="#五、部署与架构" class="headerlink" title="五、部署与架构"></a>五、部署与架构</h2><h3 id="5-1-两种形态"><a href="#5-1-两种形态" class="headerlink" title="5.1 两种形态"></a>5.1 两种形态</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">形态1：Milvus Standalone（单机）</span><br><span class="line">    - 开发/小规模，单节点</span><br><span class="line"></span><br><span class="line">形态2：Milvus Distributed（分布式）</span><br><span class="line">    依赖组件：</span><br><span class="line">        etcd（元数据）</span><br><span class="line">        MinIO/S3（对象存储，存向量文件）</span><br><span class="line">        Pulsar/Kafka（消息日志）</span><br><span class="line">        QueryNode / DataNode / IndexNode（计算节点）</span><br><span class="line">    - 水平扩展，生产标准形态</span><br><span class="line"></span><br><span class="line">简化方案（中小项目）：Milvus Lite（嵌入式）/ 云服务（Zilliz Cloud）</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-Java-接入（Spring-AI-场景）"><a href="#5-2-Java-接入（Spring-AI-场景）" class="headerlink" title="5.2 Java 接入（Spring AI 场景）"></a>5.2 Java 接入（Spring AI 场景）</h3><figure class="highlight xml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.milvus<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>milvus-sdk-java<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>2.4.x<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Spring AI + Milvus 向量存储</span></span><br><span class="line"><span class="type">VectorStore</span> <span class="variable">vectorStore</span> <span class="operator">=</span> MilvusVectorStore.builder()</span><br><span class="line">        .client(MilvusServiceClient.builder()</span><br><span class="line">                .uri(<span class="string">&quot;http://localhost:19530&quot;</span>).build())</span><br><span class="line">        .collectionName(<span class="string">&quot;kb_docs&quot;</span>)</span><br><span class="line">        .build();</span><br><span class="line"></span><br><span class="line"><span class="comment">// 写入：文档向量化并存储</span></span><br><span class="line">vectorStore.add(List.of(</span><br><span class="line">    <span class="keyword">new</span> <span class="title class_">Document</span>(<span class="string">&quot;RocketMQ事务消息解决分布式事务最终一致性...&quot;</span>, </span><br><span class="line">                 Map.of(<span class="string">&quot;source&quot;</span>, <span class="string">&quot;mq-notes.md&quot;</span>))</span><br><span class="line">));</span><br><span class="line"></span><br><span class="line"><span class="comment">// 检索：问题向量化，返回最相似文档</span></span><br><span class="line">List&lt;Document&gt; docs = vectorStore.similaritySearch(</span><br><span class="line">    SearchRequest.query(<span class="string">&quot;RocketMQ事务消息原理&quot;</span>).withTopK(<span class="number">5</span>));</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="六、Milvus-vs-其他方案"><a href="#六、Milvus-vs-其他方案" class="headerlink" title="六、Milvus vs 其他方案"></a>六、Milvus vs 其他方案</h2><h3 id="6-1-对比"><a href="#6-1-对比" class="headerlink" title="6.1 对比"></a>6.1 对比</h3><table>
+<thead>
+<tr>
+<th>对比</th>
+<th align="center">Milvus</th>
+<th align="center">ES（向量插件）</th>
+<th align="center">FAISS</th>
+<th align="center">Redis（向量）</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>定位</td>
+<td align="center">专业向量数据库</td>
+<td align="center">搜索引擎+向量</td>
+<td align="center">向量计算库</td>
+<td align="center">缓存+向量</td>
+</tr>
+<tr>
+<td>分布式</td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">❌</td>
+<td align="center">✅</td>
+</tr>
+<tr>
+<td>数据管理</td>
+<td align="center">完整（增删改&#x2F;过滤）</td>
+<td align="center">完整</td>
+<td align="center">无</td>
+<td align="center">弱</td>
+</tr>
+<tr>
+<td>持久化</td>
+<td align="center">✅</td>
+<td align="center">✅</td>
+<td align="center">❌（内存为主）</td>
+<td align="center">✅</td>
+</tr>
+<tr>
+<td>生态</td>
+<td align="center">AI场景专精</td>
+<td align="center">搜索生态</td>
+<td align="center">算法研究</td>
+<td align="center">缓存场景</td>
+</tr>
+<tr>
+<td>适用</td>
+<td align="center">RAG&#x2F;语义检索生产</td>
+<td align="center">ES已有可复用</td>
+<td align="center">原型&#x2F;研究</td>
+<td align="center">轻量场景</td>
+</tr>
+</tbody></table>
+<h3 id="6-2-选型建议"><a href="#6-2-选型建议" class="headerlink" title="6.2 选型建议"></a>6.2 选型建议</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">RAG知识库、语义搜索（生产） → Milvus</span><br><span class="line">已有ES体系、量不大 → ES dense_vector</span><br><span class="line">算法实验、快速验证 → FAISS</span><br><span class="line">需要极低延迟的缓存向量 → Redis</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="七、面试重点清单"><a href="#七、面试重点清单" class="headerlink" title="七、面试重点清单"></a>七、面试重点清单</h2><ol>
+<li><strong>向量检索本质</strong>：Embedding语义化 + ANN近似最近邻搜索</li>
+<li><strong>RAG链路</strong>：文档切片 → 向量化 → 存储 → 检索 → 拼Prompt</li>
+<li><strong>核心概念</strong>：Collection &#x2F; Field &#x2F; Partition &#x2F; Index</li>
+<li><strong>索引选型</strong>：HNSW（精度优先）&#x2F; IVF_PQ（内存优先）</li>
+<li><strong>度量方式</strong>：L2 &#x2F; IP &#x2F; COSINE，文本检索用COSINE</li>
+<li><strong>与ES对比</strong>：专业向量库 vs 搜索引擎的向量插件</li>
+<li><strong>项目结合</strong>：Spring AI + Milvus 实现知识库问答（简历项目）</li>
+</ol>
+<hr>
+<blockquote>
+<p><strong>上一篇</strong>：<a href="./mybatis02-plus.html">MyBatis02 — MyBatis-Plus实战</a></p>
+</blockquote>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/05/03/milvus01-basics/">https://chukui2005.github.io/2026/05/03/milvus01-basics/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/Milvus/">Milvus</a><a class="post-meta__tags" href="/blog/tags/%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93/">向量数据库</a><a class="post-meta__tags" href="/blog/tags/RAG/">RAG</a><a class="post-meta__tags" href="/blog/tags/%E5%A4%A7%E6%A8%A1%E5%9E%8B/">大模型</a><a class="post-meta__tags" href="/blog/tags/%E7%9B%B8%E4%BC%BC%E5%BA%A6%E6%A3%80%E7%B4%A2/">相似度检索</a><a class="post-meta__tags" href="/blog/tags/HNSW/">HNSW</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</div></div><div class="info-2"><div class="info-item-1">我写了一个开源组件：OpenAI Code Review👉 GitHub 开源地址 这是什么东西？一个基于 DeepSeek API 的自动化代码评审组件，跑在 GitHub Actions 上。 流程很简单：你往仓库推代码 → Action 自动触发 → SDK 拉出本次的 git diff → 发给 DeepSeek 评审 → 结果存到一个专门的日志仓库里 → 可选通过微信模板消息通知你。   为什么要写它？之前面了不少公司，发现很多团队对代码评审这件事执行得很敷衍 — 要么没时间做，要么做成了走过场。但代码评审其实是提升质量的硬道理。 我的想法是：把评审这件事自动化。每次 push 自动跑一次，不费人力，而且 AI 不会漏看细节。 架构设计整体是个 Maven 多模块工程，分两部分： 123456openai-code-review/├── openai-code-review-sdk/    ← 核心 SDK│   └── 源码：domain / infrastructure / types├── openai-code-review-test/   ← 测试模块├──...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/30/mybatis02-plus/" title="02 — MyBatis-Plus实战：增强不改变"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">02 — MyBatis-Plus实战：增强不改变</div></div><div class="info-2"><div class="info-item-1">MyBatis-Plus实战核心知识点速览   知识点 要点    MP是什么 MyBatis增强工具，只做增强不做改变   核心能力 BaseMapper通用CRUD + 条件构造器 + 分页插件   常用注解 @TableName &#x2F; @TableId &#x2F; @TableField   条件构造器 QueryWrapper &#x2F; LambdaQueryWrapper   分页插件 MybatisPlusInterceptor + Page   生产特性 逻辑删除 &#x2F; 自动填充 &#x2F; 乐观锁 &#x2F; 代码生成器    一、MyBatis-Plus 是什么1234567891011MP = MyBatis 的增强工具（苞米豆开源）核心理念：只做增强不做改变    - 不改变 MyBatis 原有功能    - 不改变实体类/XML 写法    - 在 MyBatis 基础上增加通用能力解决的问题：    单表 CRUD 写一堆重复SQL/XML → BaseMapper 直接继承    ↓    复杂查询仍可手写 SQL/XML ...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">56</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">204</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">10</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Milvus%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93"><span class="toc-number">1.</span> <span class="toc-text">Milvus向量数据库</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93"><span class="toc-number">1.2.</span> <span class="toc-text">一、为什么需要向量数据库</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E4%BB%8E%E5%85%B3%E9%94%AE%E8%AF%8D%E6%90%9C%E7%B4%A2%E5%88%B0%E8%AF%AD%E4%B9%89%E6%90%9C%E7%B4%A2"><span class="toc-number">1.2.1.</span> <span class="toc-text">1.1 从关键词搜索到语义搜索</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-RAG%EF%BC%88%E6%A3%80%E7%B4%A2%E5%A2%9E%E5%BC%BA%E7%94%9F%E6%88%90%EF%BC%89%E9%93%BE%E8%B7%AF"><span class="toc-number">1.2.2.</span> <span class="toc-text">1.2 RAG（检索增强生成）链路</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Milvus-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-number">1.3.</span> <span class="toc-text">二、Milvus 核心概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%BB%BA%E8%A1%A8%E7%A4%BA%E4%BE%8B"><span class="toc-number">1.3.1.</span> <span class="toc-text">建表示例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E5%86%99%E5%85%A5%E4%B8%8E%E6%A3%80%E7%B4%A2%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.</span> <span class="toc-text">三、写入与检索流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 写入流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E6%A3%80%E7%B4%A2%E6%B5%81%E7%A8%8B%EF%BC%88ANN%E8%BF%91%E4%BC%BC%E6%9C%80%E8%BF%91%E9%82%BB%EF%BC%89"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 检索流程（ANN近似最近邻）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E7%B4%A2%E5%BC%95%E4%B8%8E%E7%9B%B8%E4%BC%BC%E5%BA%A6%E5%BA%A6%E9%87%8F"><span class="toc-number">1.5.</span> <span class="toc-text">四、索引与相似度度量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E5%90%91%E9%87%8F%E7%B4%A2%E5%BC%95%E7%B1%BB%E5%9E%8B"><span class="toc-number">1.5.1.</span> <span class="toc-text">4.1 向量索引类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E4%B8%89%E7%A7%8D%E8%B7%9D%E7%A6%BB%E5%BA%A6%E9%87%8F"><span class="toc-number">1.5.2.</span> <span class="toc-text">4.2 三种距离度量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E9%83%A8%E7%BD%B2%E4%B8%8E%E6%9E%B6%E6%9E%84"><span class="toc-number">1.6.</span> <span class="toc-text">五、部署与架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E4%B8%A4%E7%A7%8D%E5%BD%A2%E6%80%81"><span class="toc-number">1.6.1.</span> <span class="toc-text">5.1 两种形态</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-Java-%E6%8E%A5%E5%85%A5%EF%BC%88Spring-AI-%E5%9C%BA%E6%99%AF%EF%BC%89"><span class="toc-number">1.6.2.</span> <span class="toc-text">5.2 Java 接入（Spring AI 场景）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81Milvus-vs-%E5%85%B6%E4%BB%96%E6%96%B9%E6%A1%88"><span class="toc-number">1.7.</span> <span class="toc-text">六、Milvus vs 其他方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E5%AF%B9%E6%AF%94"><span class="toc-number">1.7.1.</span> <span class="toc-text">6.1 对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.7.2.</span> <span class="toc-text">6.2 选型建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E9%9D%A2%E8%AF%95%E9%87%8D%E7%82%B9%E6%B8%85%E5%8D%95"><span class="toc-number">1.8.</span> <span class="toc-text">七、面试重点清单</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:30:00.000Z" title="发表于 2026-05-26 21:30:00">2026-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/03/milvus01-basics/" title="01 — Milvus向量数据库：AI时代的检索基础设施">01 — Milvus向量数据库：AI时代的检索基础设施</a><time datetime="2026-05-03T00:00:00.000Z" title="发表于 2026-05-03 08:00:00">2026-05-03</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/30/mybatis02-plus/" title="02 — MyBatis-Plus实战：增强不改变">02 — MyBatis-Plus实战：增强不改变</a><time datetime="2026-04-30T00:00:00.000Z" title="发表于 2026-04-30 08:00:00">2026-04-30</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/27/mybatis01-basics/" title="01 — MyBatis核心原理与面试重点">01 — MyBatis核心原理与面试重点</a><time datetime="2026-04-27T00:00:00.000Z" title="发表于 2026-04-27 08:00:00">2026-04-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/24/tool03-jmeter/" title="03 — JMeter性能测试实战">03 — JMeter性能测试实战</a><time datetime="2026-04-24T00:00:00.000Z" title="发表于 2026-04-24 08:00:00">2026-04-24</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@19.1.3/dist/lazyload.iife.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
