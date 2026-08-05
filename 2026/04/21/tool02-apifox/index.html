@@ -1,0 +1,979 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>02 — Apifox接口调试与协作 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Apifox接口调试与协作核心知识点速览   知识点 要点    Apifox是什么 接口调试+文档+Mock+自动化测试 一体化平台   核心概念 项目 &#x2F; 环境 &#x2F; 接口 &#x2F; 用例 &#x2F; 场景   环境管理 环境变量 + 全局变量，一键切换   数据关联 提取上一个接口的返回值传给下一个   Mock服务 前端不依赖后端即可联调   团队协作 导入Swag">
+<meta property="og:type" content="article">
+<meta property="og:title" content="02 — Apifox接口调试与协作">
+<meta property="og:url" content="https://chukui2005.github.io/2026/04/21/tool02-apifox/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="Apifox接口调试与协作核心知识点速览   知识点 要点    Apifox是什么 接口调试+文档+Mock+自动化测试 一体化平台   核心概念 项目 &#x2F; 环境 &#x2F; 接口 &#x2F; 用例 &#x2F; 场景   环境管理 环境变量 + 全局变量，一键切换   数据关联 提取上一个接口的返回值传给下一个   Mock服务 前端不依赖后端即可联调   团队协作 导入Swag">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-04-21T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-08-05T03:21:16.193Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="开发工具">
+<meta property="article:tag" content="Apifox">
+<meta property="article:tag" content="接口调试">
+<meta property="article:tag" content="API文档">
+<meta property="article:tag" content="Mock">
+<meta property="article:tag" content="自动化测试">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "02 — Apifox接口调试与协作",
+  "url": "https://chukui2005.github.io/2026/04/21/tool02-apifox/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-04-21T00:00:00.000Z",
+  "dateModified": "2026-08-05T03:21:16.193Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/04/21/tool02-apifox/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: true,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '02 — Apifox接口调试与协作',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">02 — Apifox接口调试与协作</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">02 — Apifox接口调试与协作<a class="post-edit-link" href="null_posts/tool02-apifox.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-04-21T00:00:00.000Z" title="发表于 2026-04-21 08:00:00">2026-04-21</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-08-05T03:21:16.193Z" title="更新于 2026-08-05 11:21:16">2026-08-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/">开发工具</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.6k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>5分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-08-05 11:21:16&quot;}" hidden></div><h1 id="Apifox接口调试与协作"><a href="#Apifox接口调试与协作" class="headerlink" title="Apifox接口调试与协作"></a>Apifox接口调试与协作</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Apifox是什么</td>
+<td>接口调试+文档+Mock+自动化测试 一体化平台</td>
+</tr>
+<tr>
+<td>核心概念</td>
+<td>项目 &#x2F; 环境 &#x2F; 接口 &#x2F; 用例 &#x2F; 场景</td>
+</tr>
+<tr>
+<td>环境管理</td>
+<td>环境变量 + 全局变量，一键切换</td>
+</tr>
+<tr>
+<td>数据关联</td>
+<td>提取上一个接口的返回值传给下一个</td>
+</tr>
+<tr>
+<td>Mock服务</td>
+<td>前端不依赖后端即可联调</td>
+</tr>
+<tr>
+<td>团队协作</td>
+<td>导入Swagger、生成文档、成员管理</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、Apifox-是什么"><a href="#一、Apifox-是什么" class="headerlink" title="一、Apifox 是什么"></a>一、Apifox 是什么</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Apifox = Postman（调试） + Swagger（文档） + Mock（模拟数据） + JMeter（测试）</span><br><span class="line"></span><br><span class="line">一个工具替代四个：</span><br><span class="line">    - 接口调试：发请求、看响应</span><br><span class="line">    - 接口文档：自动生成，实时同步</span><br><span class="line">    - Mock数据：前后端并行开发</span><br><span class="line">    - 自动化测试：接口用例 + 断言 + CI</span><br><span class="line"></span><br><span class="line">为什么用它（面试/简历可讲）：</span><br><span class="line">    - 接口定义一处维护，文档/测试/Mock 自动同步</span><br><span class="line">    - 团队协作：角色权限、评论、变更记录</span><br><span class="line">    - 中文界面 + 免费，国内团队主流</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>传统方案</th>
+<th>Apifox方案</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Postman调试 + Swagger文档 + Mockoon模拟 + JMeter压测</td>
+<td>一个平台全搞定</td>
+</tr>
+<tr>
+<td>多工具数据不同步，改接口要改4处</td>
+<td>接口定义单源，处处同步</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="二、核心概念"><a href="#二、核心概念" class="headerlink" title="二、核心概念"></a>二、核心概念</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">项目（Project）</span><br><span class="line">    ├── 环境（Environment）：dev / test / prod，变量隔离</span><br><span class="line">    ├── 接口管理（API）</span><br><span class="line">    │     ├── 请求定义：URL、Method、Headers、Body</span><br><span class="line">    │     ├── 响应定义：返回结构（自动生成文档）</span><br><span class="line">    │     └── 校验规则：字段类型、必填</span><br><span class="line">    ├── 测试用例（Case）：接口 + 断言</span><br><span class="line">    └── 测试场景（Scenario）：多接口串联（数据流）</span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>概念</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>接口</td>
+<td>一个HTTP接口的定义（路径&#x2F;参数&#x2F;响应）</td>
+</tr>
+<tr>
+<td>环境</td>
+<td>一组变量集合（baseUrl、token等），可切换</td>
+</tr>
+<tr>
+<td>用例</td>
+<td>针对接口的测试：参数 + 断言</td>
+</tr>
+<tr>
+<td>场景</td>
+<td>多个用例按顺序执行，数据可传递</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="三、环境与变量"><a href="#三、环境与变量" class="headerlink" title="三、环境与变量"></a>三、环境与变量</h2><h3 id="3-1-变量体系"><a href="#3-1-变量体系" class="headerlink" title="3.1 变量体系"></a>3.1 变量体系</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">变量优先级：临时变量 &gt; 环境变量 &gt; 全局变量</span><br><span class="line"></span><br><span class="line">    &#123;&#123;baseUrl&#125;&#125;     环境变量：不同环境不同值</span><br><span class="line">    &#123;&#123;token&#125;&#125;       全局变量：登录后提取，全局可用</span><br><span class="line">    &#123;&#123;$timestamp&#125;&#125;  内置函数：动态生成数据</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-环境切换"><a href="#3-2-环境切换" class="headerlink" title="3.2 环境切换"></a>3.2 环境切换</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">环境管理：</span><br><span class="line">    dev    → http://localhost:8080</span><br><span class="line">    test   → http://test-api.example.com</span><br><span class="line">    prod   → https://api.example.com</span><br><span class="line"></span><br><span class="line">接口地址写：&#123;&#123;baseUrl&#125;&#125;/api/order/list</span><br><span class="line">切换环境 → 一键切换 baseUrl，无需改接口</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>面试&#x2F;简历点：项目开发时用 Apifox 管理 dev&#x2F;test 多环境，接口定义一处维护，文档自动生成给前端联调。</p>
+</blockquote>
+<hr>
+<h2 id="四、接口调试与数据关联"><a href="#四、接口调试与数据关联" class="headerlink" title="四、接口调试与数据关联"></a>四、接口调试与数据关联</h2><h3 id="4-1-登录态处理"><a href="#4-1-登录态处理" class="headerlink" title="4.1 登录态处理"></a>4.1 登录态处理</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">方案1：手动填 token（临时）</span><br><span class="line">方案2：脚本提取（推荐）</span><br><span class="line">    登录接口&quot;后置操作&quot;里写脚本：</span><br><span class="line">    pm.response.json().token → 存为环境变量 token</span><br><span class="line">    后续所有接口 Header: Authorization: Bearer &#123;&#123;token&#125;&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 后置操作：提取 token 到环境变量</span></span><br><span class="line"><span class="keyword">const</span> res = pm.<span class="property">response</span>.<span class="title function_">json</span>();</span><br><span class="line">pm.<span class="property">environment</span>.<span class="title function_">set</span>(<span class="string">&quot;token&quot;</span>, res.<span class="property">data</span>.<span class="property">token</span>);</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-接口间数据传递（场景串联）"><a href="#4-2-接口间数据传递（场景串联）" class="headerlink" title="4.2 接口间数据传递（场景串联）"></a>4.2 接口间数据传递（场景串联）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">场景：创建订单 → 支付订单</span><br><span class="line">    第1个接口：创建订单</span><br><span class="line">        后置操作提取 orderId → &#123;&#123;orderId&#125;&#125;</span><br><span class="line">    第2个接口：支付订单</span><br><span class="line">        URL: &#123;&#123;baseUrl&#125;&#125;/api/pay/&#123;&#123;orderId&#125;&#125;</span><br><span class="line"></span><br><span class="line">实现：后置操作脚本 pm.environment.set(&quot;orderId&quot;, res.data.orderId)</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-3-断言（校验接口正确性）"><a href="#4-3-断言（校验接口正确性）" class="headerlink" title="4.3 断言（校验接口正确性）"></a>4.3 断言（校验接口正确性）</h3><figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 常用断言</span></span><br><span class="line">pm.<span class="title function_">test</span>(<span class="string">&quot;状态码200&quot;</span>, <span class="function">() =&gt;</span> pm.<span class="property">response</span>.<span class="property">to</span>.<span class="property">have</span>.<span class="title function_">status</span>(<span class="number">200</span>));</span><br><span class="line">pm.<span class="title function_">test</span>(<span class="string">&quot;业务成功&quot;</span>, <span class="function">() =&gt;</span> pm.<span class="title function_">expect</span>(pm.<span class="property">response</span>.<span class="title function_">json</span>().<span class="property">code</span>).<span class="title function_">eq</span>(<span class="number">0</span>));</span><br><span class="line">pm.<span class="title function_">test</span>(<span class="string">&quot;字段存在&quot;</span>, <span class="function">() =&gt;</span> pm.<span class="title function_">expect</span>(pm.<span class="property">response</span>.<span class="title function_">json</span>().<span class="property">data</span>.<span class="property">orderId</span>).<span class="property">to</span>.<span class="property">be</span>.<span class="property">ok</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 响应时间断言（性能基线）</span></span><br><span class="line">pm.<span class="title function_">test</span>(<span class="string">&quot;RT &lt; 500ms&quot;</span>, <span class="function">() =&gt;</span> pm.<span class="title function_">expect</span>(pm.<span class="property">response</span>.<span class="property">responseTime</span>).<span class="title function_">lt</span>(<span class="number">500</span>));</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="五、自动化测试与CI"><a href="#五、自动化测试与CI" class="headerlink" title="五、自动化测试与CI"></a>五、自动化测试与CI</h2><h3 id="5-1-测试用例组织"><a href="#5-1-测试用例组织" class="headerlink" title="5.1 测试用例组织"></a>5.1 测试用例组织</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">测试套件（Test Suite）</span><br><span class="line">    ├── 用例1：登录（断言token返回）</span><br><span class="line">    ├── 用例2：创建订单（断言订单号、提取orderId）</span><br><span class="line">    ├── 用例3：支付订单（依赖用例2的orderId）</span><br><span class="line">    └── 用例4：查询订单列表（断言列表长度&gt;0）</span><br><span class="line"></span><br><span class="line">运行方式：</span><br><span class="line">    - 手动运行（单个/批量）</span><br><span class="line">    - 定时任务（每天凌晨跑冒烟测试）</span><br><span class="line">    - CI集成（Jenkins/GitLab CI 调用 Apifox CLI）</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-集成到CI流水线"><a href="#5-2-集成到CI流水线" class="headerlink" title="5.2 集成到CI流水线"></a>5.2 集成到CI流水线</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># Apifox CLI（apifox-cli）执行测试</span></span><br><span class="line">apifox run ./tests/project.apifox.json --<span class="built_in">env</span> <span class="built_in">test</span></span><br><span class="line"><span class="comment"># 或使用 apifox 提供的 Docker 镜像跑回归</span></span><br><span class="line">docker run apifox/cli run &lt;项目ID&gt; --<span class="built_in">env</span> <span class="built_in">test</span></span><br></pre></td></tr></table></figure>
+
+<table>
+<thead>
+<tr>
+<th>集成方式</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>定时任务</td>
+<td>平台内配置，定时跑接口回归</td>
+</tr>
+<tr>
+<td>Jenkins</td>
+<td>构建后触发接口自动化</td>
+</tr>
+<tr>
+<td>GitLab CI</td>
+<td>.gitlab-ci.yml 里调用 CLI</td>
+</tr>
+<tr>
+<td>通知</td>
+<td>失败自动通知（钉钉&#x2F;企业微信&#x2F;邮件）</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="六、Mock服务"><a href="#六、Mock服务" class="headerlink" title="六、Mock服务"></a>六、Mock服务</h2><h3 id="6-1-解决的问题"><a href="#6-1-解决的问题" class="headerlink" title="6.1 解决的问题"></a>6.1 解决的问题</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">传统流程（串行，慢）：</span><br><span class="line">    前端等后端 → 后端没写好 → 前端阻塞</span><br><span class="line"></span><br><span class="line">Apifox Mock（并行）：</span><br><span class="line">    后端先定义接口（路径+参数+响应结构）</span><br><span class="line">    → Apifox 自动生成 Mock 数据</span><br><span class="line">    → 前端直接联调，不等后端</span><br><span class="line">    → 后端完成后再切到真实环境</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-2-Mock规则"><a href="#6-2-Mock规则" class="headerlink" title="6.2 Mock规则"></a>6.2 Mock规则</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">智能Mock：根据字段类型自动生成假数据</span><br><span class="line">    - name → &quot;张伟&quot;</span><br><span class="line">    - id → 自增数字</span><br><span class="line">    - email → &quot;test@example.com&quot;</span><br><span class="line"></span><br><span class="line">自定义Mock：写Mock规则脚本，生成业务假数据</span><br><span class="line">    - 订单号：ORD + 时间戳 + 随机数</span><br><span class="line">    - 金额：100~10000随机</span><br><span class="line"></span><br><span class="line">使用：前端 baseUrl 指向 Mock 地址，一键切换真实/模拟</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="七、与后端开发工作流结合"><a href="#七、与后端开发工作流结合" class="headerlink" title="七、与后端开发工作流结合"></a>七、与后端开发工作流结合</h2><h3 id="7-1-从Swagger导入"><a href="#7-1-从Swagger导入" class="headerlink" title="7.1 从Swagger导入"></a>7.1 从Swagger导入</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">已有 Spring Boot + Swagger/OpenAPI：</span><br><span class="line">    1. 启动项目访问 /v3/api-docs 导出JSON</span><br><span class="line">    2. Apifox 导入 OpenAPI 文档</span><br><span class="line">    3. 接口定义自动同步到 Apifox</span><br><span class="line">    4. 前端拿到文档即可联调</span><br><span class="line"></span><br><span class="line">反向：Apifox 修改接口 → 导出 OpenAPI → 生成代码</span><br></pre></td></tr></table></figure>
+
+<h3 id="7-2-代码生成"><a href="#7-2-代码生成" class="headerlink" title="7.2 代码生成"></a>7.2 代码生成</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Apifox 支持根据接口定义生成：</span><br><span class="line">    - Java（Feign Client / Retrofit / OkHttp）</span><br><span class="line">    - TypeScript（axios 请求封装）</span><br><span class="line">    - Go / Python 等</span><br><span class="line"></span><br><span class="line">后端生成 Feign Client → 微服务间调用不手写</span><br><span class="line">前端生成 axios 封装 → 接口调用类型安全</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="八、面试重点清单"><a href="#八、面试重点清单" class="headerlink" title="八、面试重点清单"></a>八、面试重点清单</h2><ol>
+<li><strong>Apifox 定位</strong>：调试+文档+Mock+测试 一体化（Postman+Swagger+JMeter替代）</li>
+<li><strong>环境变量</strong>：dev&#x2F;test&#x2F;prod 切换，引用</li>
+<li><strong>数据关联</strong>：后置操作提取返回值 → 场景串联</li>
+<li><strong>断言</strong>：状态码&#x2F;业务码&#x2F;字段&#x2F;响应时间</li>
+<li><strong>Mock</strong>：前后端并行开发的桥梁</li>
+<li><strong>CI集成</strong>：CLI跑自动化回归，失败通知</li>
+<li><strong>简历话术</strong>：”使用Apifox统一管理接口，自动生成文档与Mock，接口回归测试接入CI”</li>
+</ol>
+<hr>
+<blockquote>
+<p><strong>上一篇</strong>：<a href="./tool01-git.html">Tool01 — Git版本控制核心</a><br><strong>下一篇</strong>：<a href="./tool03-jmeter.html">Tool03 — JMeter性能测试实战</a></p>
+</blockquote>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/04/21/tool02-apifox/">https://chukui2005.github.io/2026/04/21/tool02-apifox/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/">开发工具</a><a class="post-meta__tags" href="/blog/tags/Apifox/">Apifox</a><a class="post-meta__tags" href="/blog/tags/%E6%8E%A5%E5%8F%A3%E8%B0%83%E8%AF%95/">接口调试</a><a class="post-meta__tags" href="/blog/tags/API%E6%96%87%E6%A1%A3/">API文档</a><a class="post-meta__tags" href="/blog/tags/Mock/">Mock</a><a class="post-meta__tags" href="/blog/tags/%E8%87%AA%E5%8A%A8%E5%8C%96%E6%B5%8B%E8%AF%95/">自动化测试</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/04/24/tool03-jmeter/" title="03 — JMeter性能测试实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">03 — JMeter性能测试实战</div></div><div class="info-2"><div class="info-item-1">JMeter性能测试实战核心知识点速览   知识点 要点    JMeter是什么 Apache开源性能测试工具，Java编写，支持HTTP&#x2F;数据库等   核心组件 线程组 &#x2F; 取样器 &#x2F; 监听器 &#x2F; 断言 &#x2F; 配置元件   关键指标 TPS（吞吐量）&#x2F; RT（响应时间）&#x2F; 并发数 &#x2F; 错误率   测试流程 需求分析 → 脚本 → 压测 → 分析 → 调优   参数化 CSV读取多组数据，模拟真实用户   性能分析 聚合报告 &#x2F; 响应时间图，定位瓶颈    一、JMeter 是什么12345678910111213JMeter = Apache 开源压力测试工具（Java编写）能测什么：    - HTTP/HTTPS 接口    - 数据库（JDBC）    - 消息队列（JMS、RabbitMQ插件）    - WebService、FTP、TCP特点：    - 开源免费，跨平台    - 线程模型模拟并发用户    - 分布式压测（一台Master调度多台Slave）    - 测试...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/18/tool01-git/" title="01 — Git版本控制核心：命令、分支与协作"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">01 — Git版本控制核心：命令、分支与协作</div></div><div class="info-2"><div class="info-item-1">Git版本控制核心核心知识点速览   知识点 要点    Git是什么 分布式版本控制系统，本地仓库+远程仓库   三大区域 工作区 &#x2F; 暂存区 &#x2F; 仓库   分支模型 Git Flow &#x2F; GitHub Flow &#x2F; 主干开发   merge vs rebase 保留历史 vs 重写历史   回滚三兄弟 reset（移动指针）&#x2F; revert（反做提交）&#x2F; checkout   冲突解决 手动合并，理解&lt;&lt;&lt;&lt;&lt;&lt;&lt; &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D; &gt;&gt;&gt;&gt;&gt;&gt;&gt;    一、Git核心概念1.1 分布式 vs 集中式12345集中式（SVN）：代码只存在中央服务器，离线无法工作分布式（Git）：每个开发者本地都有完整仓库，离线可提交    SVN:  开发者 ──→ 中央服务器（唯一权威）    Git:  开发者 ←→ 本地仓库 ←→ 远程仓库（GitHub/Gitee/GitLa...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/04/24/tool03-jmeter/" title="03 — JMeter性能测试实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-24</div><div class="info-item-2">03 — JMeter性能测试实战</div></div><div class="info-2"><div class="info-item-1">JMeter性能测试实战核心知识点速览   知识点 要点    JMeter是什么 Apache开源性能测试工具，Java编写，支持HTTP&#x2F;数据库等   核心组件 线程组 &#x2F; 取样器 &#x2F; 监听器 &#x2F; 断言 &#x2F; 配置元件   关键指标 TPS（吞吐量）&#x2F; RT（响应时间）&#x2F; 并发数 &#x2F; 错误率   测试流程 需求分析 → 脚本 → 压测 → 分析 → 调优   参数化 CSV读取多组数据，模拟真实用户   性能分析 聚合报告 &#x2F; 响应时间图，定位瓶颈    一、JMeter 是什么12345678910111213JMeter = Apache 开源压力测试工具（Java编写）能测什么：    - HTTP/HTTPS 接口    - 数据库（JDBC）    - 消息队列（JMS、RabbitMQ插件）    - WebService、FTP、TCP特点：    - 开源免费，跨平台    - 线程模型模拟并发用户    - 分布式压测（一台Master调度多台Slave）    - 测试...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/18/tool01-git/" title="01 — Git版本控制核心：命令、分支与协作"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-18</div><div class="info-item-2">01 — Git版本控制核心：命令、分支与协作</div></div><div class="info-2"><div class="info-item-1">Git版本控制核心核心知识点速览   知识点 要点    Git是什么 分布式版本控制系统，本地仓库+远程仓库   三大区域 工作区 &#x2F; 暂存区 &#x2F; 仓库   分支模型 Git Flow &#x2F; GitHub Flow &#x2F; 主干开发   merge vs rebase 保留历史 vs 重写历史   回滚三兄弟 reset（移动指针）&#x2F; revert（反做提交）&#x2F; checkout   冲突解决 手动合并，理解&lt;&lt;&lt;&lt;&lt;&lt;&lt; &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D; &gt;&gt;&gt;&gt;&gt;&gt;&gt;    一、Git核心概念1.1 分布式 vs 集中式12345集中式（SVN）：代码只存在中央服务器，离线无法工作分布式（Git）：每个开发者本地都有完整仓库，离线可提交    SVN:  开发者 ──→ 中央服务器（唯一权威）    Git:  开发者 ←→ 本地仓库 ←→ 远程仓库（GitHub/Gitee/GitLa...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">53</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">191</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">8</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Apifox%E6%8E%A5%E5%8F%A3%E8%B0%83%E8%AF%95%E4%B8%8E%E5%8D%8F%E4%BD%9C"><span class="toc-number">1.</span> <span class="toc-text">Apifox接口调试与协作</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81Apifox-%E6%98%AF%E4%BB%80%E4%B9%88"><span class="toc-number">1.2.</span> <span class="toc-text">一、Apifox 是什么</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5"><span class="toc-number">1.3.</span> <span class="toc-text">二、核心概念</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E7%8E%AF%E5%A2%83%E4%B8%8E%E5%8F%98%E9%87%8F"><span class="toc-number">1.4.</span> <span class="toc-text">三、环境与变量</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%8F%98%E9%87%8F%E4%BD%93%E7%B3%BB"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 变量体系</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E7%8E%AF%E5%A2%83%E5%88%87%E6%8D%A2"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 环境切换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%8E%A5%E5%8F%A3%E8%B0%83%E8%AF%95%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%85%B3%E8%81%94"><span class="toc-number">1.5.</span> <span class="toc-text">四、接口调试与数据关联</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E7%99%BB%E5%BD%95%E6%80%81%E5%A4%84%E7%90%86"><span class="toc-number">1.5.1.</span> <span class="toc-text">4.1 登录态处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E6%8E%A5%E5%8F%A3%E9%97%B4%E6%95%B0%E6%8D%AE%E4%BC%A0%E9%80%92%EF%BC%88%E5%9C%BA%E6%99%AF%E4%B8%B2%E8%81%94%EF%BC%89"><span class="toc-number">1.5.2.</span> <span class="toc-text">4.2 接口间数据传递（场景串联）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-%E6%96%AD%E8%A8%80%EF%BC%88%E6%A0%A1%E9%AA%8C%E6%8E%A5%E5%8F%A3%E6%AD%A3%E7%A1%AE%E6%80%A7%EF%BC%89"><span class="toc-number">1.5.3.</span> <span class="toc-text">4.3 断言（校验接口正确性）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E8%87%AA%E5%8A%A8%E5%8C%96%E6%B5%8B%E8%AF%95%E4%B8%8ECI"><span class="toc-number">1.6.</span> <span class="toc-text">五、自动化测试与CI</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E6%B5%8B%E8%AF%95%E7%94%A8%E4%BE%8B%E7%BB%84%E7%BB%87"><span class="toc-number">1.6.1.</span> <span class="toc-text">5.1 测试用例组织</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E9%9B%86%E6%88%90%E5%88%B0CI%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="toc-number">1.6.2.</span> <span class="toc-text">5.2 集成到CI流水线</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81Mock%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.7.</span> <span class="toc-text">六、Mock服务</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E8%A7%A3%E5%86%B3%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-number">1.7.1.</span> <span class="toc-text">6.1 解决的问题</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-Mock%E8%A7%84%E5%88%99"><span class="toc-number">1.7.2.</span> <span class="toc-text">6.2 Mock规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E4%B8%8E%E5%90%8E%E7%AB%AF%E5%BC%80%E5%8F%91%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%BB%93%E5%90%88"><span class="toc-number">1.8.</span> <span class="toc-text">七、与后端开发工作流结合</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E4%BB%8ESwagger%E5%AF%BC%E5%85%A5"><span class="toc-number">1.8.1.</span> <span class="toc-text">7.1 从Swagger导入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E4%BB%A3%E7%A0%81%E7%94%9F%E6%88%90"><span class="toc-number">1.8.2.</span> <span class="toc-text">7.2 代码生成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E9%9D%A2%E8%AF%95%E9%87%8D%E7%82%B9%E6%B8%85%E5%8D%95"><span class="toc-number">1.9.</span> <span class="toc-text">八、面试重点清单</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:30:00.000Z" title="发表于 2026-05-26 21:30:00">2026-05-26</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/24/tool03-jmeter/" title="03 — JMeter性能测试实战">03 — JMeter性能测试实战</a><time datetime="2026-04-24T00:00:00.000Z" title="发表于 2026-04-24 08:00:00">2026-04-24</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/21/tool02-apifox/" title="02 — Apifox接口调试与协作">02 — Apifox接口调试与协作</a><time datetime="2026-04-21T00:00:00.000Z" title="发表于 2026-04-21 08:00:00">2026-04-21</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/18/tool01-git/" title="01 — Git版本控制核心：命令、分支与协作">01 — Git版本控制核心：命令、分支与协作</a><time datetime="2026-04-18T00:00:00.000Z" title="发表于 2026-04-18 08:00:00">2026-04-18</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/04/15/es03-cluster/" title="03 — ElasticSearch集群与生产实践">03 — ElasticSearch集群与生产实践</a><time datetime="2026-04-15T00:00:00.000Z" title="发表于 2026-04-15 08:00:00">2026-04-15</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload@19.1.3/dist/lazyload.iife.min.js"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
