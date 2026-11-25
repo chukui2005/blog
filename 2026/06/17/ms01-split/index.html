@@ -1,0 +1,955 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>01 — 微服务拆分：什么时候该拆，怎么拆 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="微服务拆分：什么时候该拆，怎么拆核心知识点速览   知识点 要点    本质 微服务是组织问题，不是技术问题   拆分依据 业务能力、DDD 限界上下文、团队边界（康威定律）   拆分标准 能独立部署、独立数据库、独立迭代   拆分的代价 分布式事务、网络不可靠、链路变长、运维复杂度上升   常见反模式 分布式单体、共享数据库、纳米服务   分层结构 网关&#x2F;BFF → 业务服务 → 基础">
+<meta property="og:type" content="article">
+<meta property="og:title" content="01 — 微服务拆分：什么时候该拆，怎么拆">
+<meta property="og:url" content="https://chukui2005.github.io/2026/06/17/ms01-split/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="微服务拆分：什么时候该拆，怎么拆核心知识点速览   知识点 要点    本质 微服务是组织问题，不是技术问题   拆分依据 业务能力、DDD 限界上下文、团队边界（康威定律）   拆分标准 能独立部署、独立数据库、独立迭代   拆分的代价 分布式事务、网络不可靠、链路变长、运维复杂度上升   常见反模式 分布式单体、共享数据库、纳米服务   分层结构 网关&#x2F;BFF → 业务服务 → 基础">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-06-17T12:33:18.000Z">
+<meta property="article:modified_time" content="2026-11-25T07:38:03.604Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="面试">
+<meta property="article:tag" content="微服务">
+<meta property="article:tag" content="架构设计">
+<meta property="article:tag" content="DDD">
+<meta property="article:tag" content="服务拆分">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "01 — 微服务拆分：什么时候该拆，怎么拆",
+  "url": "https://chukui2005.github.io/2026/06/17/ms01-split/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-06-17T12:33:18.000Z",
+  "dateModified": "2026-11-25T07:38:03.604Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/06/17/ms01-split/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '01 — 微服务拆分：什么时候该拆，怎么拆',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">01 — 微服务拆分：什么时候该拆，怎么拆</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">01 — 微服务拆分：什么时候该拆，怎么拆<a class="post-edit-link" href="null_posts/ms01-split.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-06-17T12:33:18.000Z" title="发表于 2026-06-17 20:33:18">2026-06-17</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-11-25T07:38:03.604Z" title="更新于 2026-11-25 15:38:03">2026-11-25</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/%E5%BE%AE%E6%9C%8D%E5%8A%A1/">微服务</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">2.4k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>7分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span>229</span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-11-25 15:38:03&quot;}" hidden></div><h1 id="微服务拆分：什么时候该拆，怎么拆"><a href="#微服务拆分：什么时候该拆，怎么拆" class="headerlink" title="微服务拆分：什么时候该拆，怎么拆"></a>微服务拆分：什么时候该拆，怎么拆</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>本质</td>
+<td>微服务是组织问题，不是技术问题</td>
+</tr>
+<tr>
+<td>拆分依据</td>
+<td>业务能力、DDD 限界上下文、团队边界（康威定律）</td>
+</tr>
+<tr>
+<td>拆分标准</td>
+<td>能独立部署、独立数据库、独立迭代</td>
+</tr>
+<tr>
+<td>拆分的代价</td>
+<td>分布式事务、网络不可靠、链路变长、运维复杂度上升</td>
+</tr>
+<tr>
+<td>常见反模式</td>
+<td>分布式单体、共享数据库、纳米服务</td>
+</tr>
+<tr>
+<td>分层结构</td>
+<td>网关&#x2F;BFF → 业务服务 → 基础服务</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、先说一个反常识的结论"><a href="#一、先说一个反常识的结论" class="headerlink" title="一、先说一个反常识的结论"></a>一、先说一个反常识的结论</h2><p>微服务不是”更先进的架构”，它是<strong>用复杂度换扩展性</strong>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">单体应用：</span><br><span class="line">    一个进程、一个数据库、一次部署</span><br><span class="line">    优点：简单、事务好做、调试方便、性能高（方法调用 vs 网络调用）</span><br><span class="line">    缺点：代码耦合、团队互相阻塞、一处改动全量发布、不能按模块扩容</span><br><span class="line"></span><br><span class="line">微服务：</span><br><span class="line">    多个进程、多个数据库、多次部署</span><br><span class="line">    优点：独立迭代、独立扩容、故障隔离、技术栈自由</span><br><span class="line">    缺点：分布式事务、网络不可靠、链路追踪、运维成本翻倍</span><br></pre></td></tr></table></figure>
+
+<p>所以正确的判断不是”要不要上微服务”，而是：<strong>当前的组织和业务规模，是否已经让单体的缺点压过了优点。</strong></p>
+<p>几个典型信号：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">✓ 团队超过 3 个小组，改同一个仓库天天冲突</span><br><span class="line">✓ 某个模块流量是其他模块的 10 倍，但只能整体扩容</span><br><span class="line">✓ 一次小改动要走完整回归测试，发布窗口一周一次</span><br><span class="line">✓ 某个模块的技术栈明显不匹配（比如推荐要用 Python）</span><br><span class="line">✗ 只有 3 个人、日活几千 —— 拆了纯属给自己找麻烦</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="二、怎么拆：三种视角"><a href="#二、怎么拆：三种视角" class="headerlink" title="二、怎么拆：三种视角"></a>二、怎么拆：三种视角</h2><h3 id="2-1-视角一：业务能力"><a href="#2-1-视角一：业务能力" class="headerlink" title="2.1 视角一：业务能力"></a>2.1 视角一：业务能力</h3><p>按”公司做什么生意”来切，最直观：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">电商：用户、商品、库存、订单、支付、营销、物流</span><br><span class="line">SaaS：租户、权限、计费、消息、报表</span><br></pre></td></tr></table></figure>
+
+<p>这种切法的好处是<strong>业务方听得懂</strong>，坏处是容易切太粗，一个”订单服务”里塞了订单、发货、售后、对账。</p>
+<h3 id="2-2-视角二：DDD-限界上下文"><a href="#2-2-视角二：DDD-限界上下文" class="headerlink" title="2.2 视角二：DDD 限界上下文"></a>2.2 视角二：DDD 限界上下文</h3><p>这是最被推荐的方法。核心是找到<strong>领域边界</strong>，而不是按表或按技术分层切。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">错误切法（按技术分层）：</span><br><span class="line">    用户服务、数据服务、接口服务  ← 全是 CRUD，业务逻辑散落各处</span><br><span class="line"></span><br><span class="line">正确切法（按限界上下文）：</span><br><span class="line">    订单上下文：下单、改价、取消、履约状态机</span><br><span class="line">    库存上下文：可用库存、锁定库存、扣减</span><br><span class="line">    支付上下文：支付单、渠道、对账</span><br></pre></td></tr></table></figure>
+
+<p>每个上下文有自己的<strong>统一语言</strong>和<strong>领域模型</strong>。同一个词在不同上下文里含义可以不同——比如”用户”在订单上下文里是下单人，在权限上下文里是账号，这没问题，反而更准确。</p>
+<p>实操上可以用事件风暴（Event Storming）来划：把领域事件列出来，看哪些事件在同一批聚合里产生和消费，聚集在一起的就是一个上下文。</p>
+<h3 id="2-3-视角三：团队边界（康威定律）"><a href="#2-3-视角三：团队边界（康威定律）" class="headerlink" title="2.3 视角三：团队边界（康威定律）"></a>2.3 视角三：团队边界（康威定律）</h3><blockquote>
+<p>系统架构会不可避免地反映组织的沟通结构。</p>
+</blockquote>
+<p>说白了：<strong>服务边界最好和团队边界对齐</strong>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">一个团队负责 3~5 个服务，是合理区间</span><br><span class="line">一个服务被 3 个团队同时改，说明切错了</span><br></pre></td></tr></table></figure>
+
+<p>反过来，如果你硬按”技术最优”拆，但两个团队必须天天同步发版，那这个拆分会很快退化回分布式单体。</p>
+<h3 id="2-4-粒度怎么定"><a href="#2-4-粒度怎么定" class="headerlink" title="2.4 粒度怎么定"></a>2.4 粒度怎么定</h3><p>三个判断标准，够用：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 能独立部署：改这个服务不需要同时改别的服务</span><br><span class="line">② 能独立存储：有自己的库，不跨服务 join</span><br><span class="line">③ 能独立扩容：流量特征不同，可以分开伸缩</span><br></pre></td></tr></table></figure>
+
+<p>再加一条经验：<strong>先粗后细</strong>。一开始拆 4~5 个服务就够，等某个服务真的变成瓶颈再拆——拆错了合回去的成本，比一开始拆太细要低得多。</p>
+<hr>
+<h2 id="三、拆完之后，你要付出什么"><a href="#三、拆完之后，你要付出什么" class="headerlink" title="三、拆完之后，你要付出什么"></a>三、拆完之后，你要付出什么</h2><p>这部分才是面试真正想听的——能不能说清楚”知道代价”。</p>
+<h3 id="3-1-分布式事务"><a href="#3-1-分布式事务" class="headerlink" title="3.1 分布式事务"></a>3.1 分布式事务</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">单体：@Transactional 一把梭，本地事务保证 ACID</span><br><span class="line">微服务：下单要扣库存、要发券、要记积分 → 跨三个服务</span><br><span class="line">       本地事务管不了 → 只能最终一致</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-网络不可靠"><a href="#3-2-网络不可靠" class="headerlink" title="3.2 网络不可靠"></a>3.2 网络不可靠</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">方法调用 → 变成 HTTP/RPC 调用</span><br><span class="line">    调用会超时、会失败、会重复、会乱序</span><br><span class="line">    每个调用点都要考虑：超时怎么设、失败怎么重试、重试会不会放大</span><br></pre></td></tr></table></figure>
+
+<p><strong>这是最容易低估的一条。</strong> 单体里一个 try-catch 就完事的调用，在微服务里要考虑重试、幂等、降级、熔断四件事。</p>
+<h3 id="3-3-链路变长"><a href="#3-3-链路变长" class="headerlink" title="3.3 链路变长"></a>3.3 链路变长</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">单体：一次请求 = 一个进程的栈</span><br><span class="line">微服务：一次请求 = 网关 + 5 个服务 + 3 个中间件</span><br><span class="line">        出了问题，日志散在 6 台机器上</span><br></pre></td></tr></table></figure>
+
+<p>所以微服务必须配链路追踪（TraceId 贯穿全链路），否则线上排查基本靠猜。</p>
+<h3 id="3-4-数据一致性"><a href="#3-4-数据一致性" class="headerlink" title="3.4 数据一致性"></a>3.4 数据一致性</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">不能跨服务 join → 要么冗余字段，要么多次查询在内存里拼</span><br><span class="line">不能跨服务事务 → 要么最终一致，要么业务上设计成&quot;允许中间态&quot;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-5-运维与部署"><a href="#3-5-运维与部署" class="headerlink" title="3.5 运维与部署"></a>3.5 运维与部署</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">单体：1 个包，1 个进程</span><br><span class="line">微服务：几十个服务，每个要多副本，要服务发现、要配置中心、要网关、要监控、要日志聚合</span><br></pre></td></tr></table></figure>
+
+<p><strong>没有配套基础设施就不要拆微服务</strong>——注册中心、配置中心、网关、链路追踪、监控告警，这五件套缺一个都会很痛苦。</p>
+<hr>
+<h2 id="四、典型分层结构"><a href="#四、典型分层结构" class="headerlink" title="四、典型分层结构"></a>四、典型分层结构</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">         客户端（App / Web / 小程序）</span><br><span class="line">                   ↓</span><br><span class="line">           ┌───────────────┐</span><br><span class="line">           │   API 网关     │  路由、鉴权、限流、灰度</span><br><span class="line">           └───────────────┘</span><br><span class="line">                   ↓</span><br><span class="line">     ┌─────────────┼─────────────┐</span><br><span class="line">     ↓             ↓             ↓</span><br><span class="line">BFF（可选）    BFF（可选）    管理后台 BFF</span><br><span class="line">     ↓             ↓             ↓</span><br><span class="line">┌─────────────────────────────────┐</span><br><span class="line">│        业务服务层                │</span><br><span class="line">│  订单 / 商品 / 库存 / 支付 / 营销 │</span><br><span class="line">└─────────────────────────────────┘</span><br><span class="line">                   ↓</span><br><span class="line">┌─────────────────────────────────┐</span><br><span class="line">│        基础/通用服务              │</span><br><span class="line">│  用户 / 权限 / 消息 / 文件 / 配置  │</span><br><span class="line">└─────────────────────────────────┘</span><br><span class="line">                   ↓</span><br><span class="line">           中间件（MQ / Redis / DB）</span><br></pre></td></tr></table></figure>
+
+<p>BFF（Backend For Frontend）的作用：不同端的字段需求不一样，别让业务服务去适配每个端，加一层专门做聚合和裁剪。</p>
+<hr>
+<h2 id="五、四种常见反模式"><a href="#五、四种常见反模式" class="headerlink" title="五、四种常见反模式"></a>五、四种常见反模式</h2><h3 id="5-1-分布式单体"><a href="#5-1-分布式单体" class="headerlink" title="5.1 分布式单体"></a>5.1 分布式单体</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">现象：服务拆了，但每次发版必须一起发</span><br><span class="line">原因：服务之间强耦合，接口一改全链路都要改</span><br><span class="line">本质：拆了进程，没拆边界</span><br></pre></td></tr></table></figure>
+
+<p>判断方法：看发布频率——如果两个服务永远同时发版，它们其实是同一个服务。</p>
+<h3 id="5-2-共享数据库"><a href="#5-2-共享数据库" class="headerlink" title="5.2 共享数据库"></a>5.2 共享数据库</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">现象：多个服务连同一个库，甚至跨服务 join</span><br><span class="line">危害：</span><br><span class="line">    ① 数据库成了隐式接口，改表就是改契约</span><br><span class="line">    ② 无法独立扩容、独立演进</span><br><span class="line">    ③ 事务边界混乱</span><br></pre></td></tr></table></figure>
+
+<p>正确做法是<strong>每个服务一个库</strong>（逻辑隔离至少要有独立 schema + 独立账号，禁止跨库访问）。</p>
+<p>跨服务需要的数据怎么办？两种：调接口查，或者订阅变更事件做本地冗余（CQRS 的思路）。</p>
+<h3 id="5-3-纳米服务"><a href="#5-3-纳米服务" class="headerlink" title="5.3 纳米服务"></a>5.3 纳米服务</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">现象：一个服务只有一个接口、一张表</span><br><span class="line">危害：调用链极长，一个业务要跨 10 个服务，性能和排障都崩</span><br></pre></td></tr></table></figure>
+
+<p>经验值：一个服务的代码量如果不到几千行、没有独立的业务语义，多半是拆过了。</p>
+<h3 id="5-4-只拆业务不拆数据"><a href="#5-4-只拆业务不拆数据" class="headerlink" title="5.4 只拆业务不拆数据"></a>5.4 只拆业务不拆数据</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">现象：服务是独立的，但所有服务都读写同一批表</span><br><span class="line">本质：把单体数据库当成了&quot;共享内存&quot;</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="六、一个实际的拆分例子"><a href="#六、一个实际的拆分例子" class="headerlink" title="六、一个实际的拆分例子"></a>六、一个实际的拆分例子</h2><p>以电商下单链路为例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">用户下单</span><br><span class="line">  ↓</span><br><span class="line">营销服务：校验优惠券可用性、锁定券</span><br><span class="line">  ↓</span><br><span class="line">库存服务：锁定库存（预占，不是扣减）</span><br><span class="line">  ↓</span><br><span class="line">订单服务：创建订单（本地事务）</span><br><span class="line">  ↓</span><br><span class="line">支付服务：创建支付单</span><br><span class="line">  ↓</span><br><span class="line">（异步）MQ → 积分服务加积分、通知服务发短信</span><br></pre></td></tr></table></figure>
+
+<p>关键设计点：</p>
+<ul>
+<li><strong>库存用预占 + 确认&#x2F;释放</strong>，而不是直接扣减——这样超时未支付可以释放，避免”扣了库存但订单没成”</li>
+<li><strong>订单创建是本地事务</strong>，跨服务的一致性靠 MQ 最终一致</li>
+<li><strong>非核心链路全部异步</strong>：加积分、发短信失败不影响下单</li>
+<li><strong>每一步都要幂等</strong>：MQ 会重复投递，接口要能重复执行</li>
+</ul>
+<p>这就是”拆分”落到代码上的样子——不是画几个框，而是想清楚<strong>每一步失败之后怎么办</strong>。</p>
+<hr>
+<h2 id="七、面试重点清单"><a href="#七、面试重点清单" class="headerlink" title="七、面试重点清单"></a>七、面试重点清单</h2><ul>
+<li>单体架构和微服务架构各自的优缺点？</li>
+<li>什么情况下不该上微服务？</li>
+<li>微服务拆分的依据有哪些？DDD 的限界上下文是什么？</li>
+<li>康威定律说的是什么？和拆分有什么关系？</li>
+<li>服务粒度怎么判断？拆太细有什么问题？</li>
+<li>拆微服务要付出哪些代价？</li>
+<li>什么是分布式单体？怎么判断？</li>
+<li>为什么不能共享数据库？跨服务要数据怎么办？</li>
+<li>微服务必须配套哪些基础设施？</li>
+<li>BFF 是干什么的？</li>
+<li>你项目里是怎么拆服务的？（结合真实项目讲）</li>
+</ul>
+<hr>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>微服务这块最容易犯的错，是把它当成”技术升级”而不是”组织权衡”。</p>
+<p>三句话记住：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 拆分的依据是业务边界和团队边界，不是表结构</span><br><span class="line">② 拆分的前提是配套基础设施到位</span><br><span class="line">③ 先粗后细，拆错了合回去的成本很高</span><br></pre></td></tr></table></figure>
+
+<p>下一篇讲微服务的地基：注册中心和配置中心，以 Nacos 为主线。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/06/17/ms01-split/">https://chukui2005.github.io/2026/06/17/ms01-split/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/%E9%9D%A2%E8%AF%95/">面试</a><a class="post-meta__tags" href="/blog/tags/%E5%BE%AE%E6%9C%8D%E5%8A%A1/">微服务</a><a class="post-meta__tags" href="/blog/tags/%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1/">架构设计</a><a class="post-meta__tags" href="/blog/tags/DDD/">DDD</a><a class="post-meta__tags" href="/blog/tags/%E6%9C%8D%E5%8A%A1%E6%8B%86%E5%88%86/">服务拆分</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/06/20/ms02-nacos/" title="02 — 注册中心与配置中心：Nacos实战与原理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">02 — 注册中心与配置中心：Nacos实战与原理</div></div><div class="info-2"><div class="info-item-1">注册中心与配置中心：Nacos实战与原理核心知识点速览   知识点 要点    注册中心解决 服务实例地址动态变化，调用方要能发现   Nacos 双模式 临时实例 AP（Distro）&#x2F; 持久实例 CP（Raft）   健康检查 临时实例客户端心跳，持久实例服务端探测   配置中心 DataId + Group + Namespace 三级隔离   配置推送 客户端长轮询（30s）+ MD5 比对 + 本地快照   热更新 @RefreshScope，靠重建 Bean 生效   常见坑 静态字段、final、连接池参数不生效    一、为什么需要注册中心微服务里服务实例的 IP 是动态的： 12345服务 A 要调服务 B    B 有 5 个实例，部署在 10.0.1.5:8080 ~ 10.0.1.9:8080    明天扩容到 8 个，后天有 2 个挂掉重启换了 IPA 怎么知道该调谁？  三种方案对比： 123456789① 写死在配置文件里   → 一扩容就要改配置重启，不可行② 用 Nginx 做静态负载均衡   → Nginx 的 upstream 还是...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/14/juc06-chm-threadlocal/" title="06 — ConcurrentHashMap与ThreadLocal深度剖析"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">06 — ConcurrentHashMap与ThreadLocal深度剖析</div></div><div class="info-2"><div class="info-item-1">ConcurrentHashMap与ThreadLocal深度剖析核心知识点速览   知识点 要点    CHM 1.7 Segment 分段锁，16 段，继承 ReentrantLock   CHM 1.8 Node 数组 + CAS + synchronized 锁头节点   扩容 多线程协助迁移（helpTransfer），ForwardingNode 标记   计数 baseCount + CounterCell[]，分散热点   ThreadLocal 每个 Thread 有一个 ThreadLocalMap   Entry key 是弱引用，value 是强引用 → 泄漏根源   避免泄漏 用完必须 remove()    一、ConcurrentHashMap 为什么要存在HashMap 线程不安全（1.7 头插法还会死循环，1.8 改成尾插仍有数据丢失），Hashtable 所有方法加 synchronized（等于全表锁，性能差）。 CHM 的目标：高并发下既要线程安全，又不能锁全表。  二、JDK 1.7：分段锁12345678ConcurrentHashMa...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/06/26/ms04-gateway/" title="04 — 网关与统一鉴权：Gateway实战"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-26</div><div class="info-item-2">04 — 网关与统一鉴权：Gateway实战</div></div><div class="info-2"><div class="info-item-1">网关与统一鉴权：Gateway实战核心知识点速览   知识点 要点    三大概念 Route（路由）、Predicate（断言）、Filter（过滤器）   技术底座 Spring WebFlux + Netty，全异步非阻塞   过滤器 全局 GlobalFilter vs 局部 GatewayFilter，靠 Ordered 排序   鉴权流程 白名单放行 → 解析 JWT → 校验 → 透传用户信息   限流 RequestRateLimiter + Redis + Lua 令牌桶   灰度 按 Header &#x2F; 权重路由到不同实例    一、网关到底解决什么没有网关的时候，每个服务都要自己处理这些： 1跨域、鉴权、限流、日志、TraceId、灰度、协议转换、SSL 卸载  七八个服务各写一遍，改一次规则要改八处。网关就是把这些横切关注点收拢到入口处统一处理。 12345客户端  ↓【网关】鉴权、限流、路由、日志、灰度  ↓业务服务（只关心业务）  顺带还有个好处：业务服务不用暴露公网，只开内网端口，安全边界清晰。  二、Gateway 的三大概念1234567...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/29/ms05-distributed-transaction/" title="05 — 分布式事务：从2PC到Seata"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-29</div><div class="info-item-2">05 — 分布式事务：从2PC到Seata</div></div><div class="info-2"><div class="info-item-1">分布式事务：从2PC到Seata核心知识点速览   知识点 要点    为什么需要 跨库跨服务，本地事务管不了   理论基础 CAP、BASE、ACID 的取舍   2PC&#x2F;XA 准备 + 提交，同步阻塞，协调者单点   TCC Try-Confirm-Cancel，业务补偿，要防空回滚&#x2F;悬挂&#x2F;幂等   Saga 正向执行 + 反向补偿，适合长流程   可靠消息 本地消息表 &#x2F; RocketMQ 事务消息   Seata AT 一阶段业务SQL+undo log+全局锁，二阶段提交或反向补偿    一、问题从哪来123456@Transactionalpublic void createOrder() &#123;    orderDao.insert(order);            // 订单库    stockClient.lock(skuId, count);    // 库存服务（另一个库）    couponClient.use(couponId);        // 营销服务（另一个库）&#125;  @Transact...</div></div></div></a><a class="pagination-related" href="/blog/2026/07/02/ms06-observability/" title="06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-02</div><div class="info-item-2">06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;</div></div><div class="info-2"><div class="info-item-1">可观测性与高可用：微服务怎么”看得见、扛得住”核心知识点速览   知识点 要点    三大支柱 日志（Logs）、指标（Metrics）、链路（Traces）   TraceId 全局唯一，跨服务&#x2F;跨 MQ 透传，串起整条链路   四大黄金信号 延迟、流量、错误、饱和度   熔断状态机 关闭 → 打开 → 半开   隔离方式 线程池隔离（强隔离）vs 信号量隔离（轻量）   高可用手段 限流、降级、超时、重试、多副本、混沌演练    一、为什么微服务必须做可观测性单体时代排障： 1看一个日志文件 → 找到异常栈 → 定位代码行  微服务时代排障： 123一次请求经过了：网关 → 订单 → 库存 → 支付 → 优惠券 → MQ → 积分日志散在 8 台机器、6 个服务、3 个中间件里用户只说&quot;下单失败了&quot;  没有可观测性，你连”哪个服务出的问题”都不知道。  二、三大支柱2.1 日志（Logs）要解决的问题：日志太多找不到，日志太少定位不了。 123456logging:  pattern:    console: &quot;%d&#123;yyyy...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/23/ms03-rpc/" title="03 — RPC与远程调用：Feign原理与超时重试的坑"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-23</div><div class="info-item-2">03 — RPC与远程调用：Feign原理与超时重试的坑</div></div><div class="info-2"><div class="info-item-1">RPC与远程调用：Feign原理与超时重试的坑核心知识点速览   知识点 要点    Feign 本质 声明式 HTTP 客户端，靠动态代理生成实现   核心链路 动态代理 → Contract 解析 → 编码 → 负载均衡 → 发送 → 解码   负载均衡 轮询、随机、权重、最小连接数、一致性哈希   超时设计 调用方超时 &lt; 服务提供方处理时间 + 网络延迟   重试风险 非幂等接口重试 &#x3D; 数据重复，重试还会放大流量   Feign vs Dubbo HTTP 文本协议 vs 二进制私有协议 + 长连接    一、Feign 是什么一句话：让你像调本地方法一样调 HTTP 接口。 1234567@FeignClient(name = &quot;stock-service&quot;, fallback = StockFallback.class)public interface StockClient &#123;    @PostMapping(&quot;/stock/lock&quot;)    Result&lt;Void&gt; lock(@Re...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/20/ms02-nacos/" title="02 — 注册中心与配置中心：Nacos实战与原理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-20</div><div class="info-item-2">02 — 注册中心与配置中心：Nacos实战与原理</div></div><div class="info-2"><div class="info-item-1">注册中心与配置中心：Nacos实战与原理核心知识点速览   知识点 要点    注册中心解决 服务实例地址动态变化，调用方要能发现   Nacos 双模式 临时实例 AP（Distro）&#x2F; 持久实例 CP（Raft）   健康检查 临时实例客户端心跳，持久实例服务端探测   配置中心 DataId + Group + Namespace 三级隔离   配置推送 客户端长轮询（30s）+ MD5 比对 + 本地快照   热更新 @RefreshScope，靠重建 Bean 生效   常见坑 静态字段、final、连接池参数不生效    一、为什么需要注册中心微服务里服务实例的 IP 是动态的： 12345服务 A 要调服务 B    B 有 5 个实例，部署在 10.0.1.5:8080 ~ 10.0.1.9:8080    明天扩容到 8 个，后天有 2 个挂掉重启换了 IPA 怎么知道该调谁？  三种方案对比： 123456789① 写死在配置文件里   → 一扩容就要改配置重启，不可行② 用 Nginx 做静态负载均衡   → Nginx 的 upstream 还是...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/02/juc02-synchronized/" title="02 — synchronized原理与锁升级"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-02</div><div class="info-item-2">02 — synchronized原理与锁升级</div></div><div class="info-2"><div class="info-item-1">synchronized原理与锁升级核心知识点速览   知识点 要点    三种用法 修饰实例方法、静态方法、代码块   字节码 代码块是 monitorenter&#x2F;monitorexit，方法是 ACC_SYNCHRONIZED   Monitor owner、entryList、waitSet、recursions   锁状态 无锁 → 偏向锁 → 轻量级锁 → 重量级锁   偏向锁 记录线程 ID，CAS 一次即可重入（JDK15 已默认禁用）   轻量级锁 Lock Record + 自旋 CAS，适合短时间竞争   重量级锁 内核互斥量，线程挂起，开销大    一、三种用法，锁的对象不一样123456789101112// ① 修饰实例方法 → 锁的是 this（当前对象）public synchronized void m1() &#123; &#125;// ② 修饰静态方法 → 锁的是 Class 对象public static synchronized void m2() &#123; &#125;// ③ 修饰代码块 → 锁的是括号里的对象publi...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">79</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">277</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%BE%AE%E6%9C%8D%E5%8A%A1%E6%8B%86%E5%88%86%EF%BC%9A%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E8%AF%A5%E6%8B%86%EF%BC%8C%E6%80%8E%E4%B9%88%E6%8B%86"><span class="toc-number">1.</span> <span class="toc-text">微服务拆分：什么时候该拆，怎么拆</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E5%85%88%E8%AF%B4%E4%B8%80%E4%B8%AA%E5%8F%8D%E5%B8%B8%E8%AF%86%E7%9A%84%E7%BB%93%E8%AE%BA"><span class="toc-number">1.2.</span> <span class="toc-text">一、先说一个反常识的结论</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E6%80%8E%E4%B9%88%E6%8B%86%EF%BC%9A%E4%B8%89%E7%A7%8D%E8%A7%86%E8%A7%92"><span class="toc-number">1.3.</span> <span class="toc-text">二、怎么拆：三种视角</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E8%A7%86%E8%A7%92%E4%B8%80%EF%BC%9A%E4%B8%9A%E5%8A%A1%E8%83%BD%E5%8A%9B"><span class="toc-number">1.3.1.</span> <span class="toc-text">2.1 视角一：业务能力</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E8%A7%86%E8%A7%92%E4%BA%8C%EF%BC%9ADDD-%E9%99%90%E7%95%8C%E4%B8%8A%E4%B8%8B%E6%96%87"><span class="toc-number">1.3.2.</span> <span class="toc-text">2.2 视角二：DDD 限界上下文</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E8%A7%86%E8%A7%92%E4%B8%89%EF%BC%9A%E5%9B%A2%E9%98%9F%E8%BE%B9%E7%95%8C%EF%BC%88%E5%BA%B7%E5%A8%81%E5%AE%9A%E5%BE%8B%EF%BC%89"><span class="toc-number">1.3.3.</span> <span class="toc-text">2.3 视角三：团队边界（康威定律）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-%E7%B2%92%E5%BA%A6%E6%80%8E%E4%B9%88%E5%AE%9A"><span class="toc-number">1.3.4.</span> <span class="toc-text">2.4 粒度怎么定</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E6%8B%86%E5%AE%8C%E4%B9%8B%E5%90%8E%EF%BC%8C%E4%BD%A0%E8%A6%81%E4%BB%98%E5%87%BA%E4%BB%80%E4%B9%88"><span class="toc-number">1.4.</span> <span class="toc-text">三、拆完之后，你要付出什么</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 分布式事务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E7%BD%91%E7%BB%9C%E4%B8%8D%E5%8F%AF%E9%9D%A0"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 网络不可靠</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E9%93%BE%E8%B7%AF%E5%8F%98%E9%95%BF"><span class="toc-number">1.4.3.</span> <span class="toc-text">3.3 链路变长</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7"><span class="toc-number">1.4.4.</span> <span class="toc-text">3.4 数据一致性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-%E8%BF%90%E7%BB%B4%E4%B8%8E%E9%83%A8%E7%BD%B2"><span class="toc-number">1.4.5.</span> <span class="toc-text">3.5 运维与部署</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E5%85%B8%E5%9E%8B%E5%88%86%E5%B1%82%E7%BB%93%E6%9E%84"><span class="toc-number">1.5.</span> <span class="toc-text">四、典型分层结构</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%9B%9B%E7%A7%8D%E5%B8%B8%E8%A7%81%E5%8F%8D%E6%A8%A1%E5%BC%8F"><span class="toc-number">1.6.</span> <span class="toc-text">五、四种常见反模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%88%86%E5%B8%83%E5%BC%8F%E5%8D%95%E4%BD%93"><span class="toc-number">1.6.1.</span> <span class="toc-text">5.1 分布式单体</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E5%85%B1%E4%BA%AB%E6%95%B0%E6%8D%AE%E5%BA%93"><span class="toc-number">1.6.2.</span> <span class="toc-text">5.2 共享数据库</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E7%BA%B3%E7%B1%B3%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.6.3.</span> <span class="toc-text">5.3 纳米服务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-%E5%8F%AA%E6%8B%86%E4%B8%9A%E5%8A%A1%E4%B8%8D%E6%8B%86%E6%95%B0%E6%8D%AE"><span class="toc-number">1.6.4.</span> <span class="toc-text">5.4 只拆业务不拆数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E4%B8%80%E4%B8%AA%E5%AE%9E%E9%99%85%E7%9A%84%E6%8B%86%E5%88%86%E4%BE%8B%E5%AD%90"><span class="toc-number">1.7.</span> <span class="toc-text">六、一个实际的拆分例子</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E9%9D%A2%E8%AF%95%E9%87%8D%E7%82%B9%E6%B8%85%E5%8D%95"><span class="toc-number">1.8.</span> <span class="toc-text">七、面试重点清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B0%8F%E7%BB%93"><span class="toc-number">1.9.</span> <span class="toc-text">小结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/11/20/gitglass/" title="我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交">我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交</a><time datetime="2026-11-20T03:01:39.000Z" title="发表于 2026-11-20 11:01:39">2026-11-20</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/10/17/deepseek-harness/" title="01 — DeepSeek Harness：Agent = 模型 + 工程底座">01 — DeepSeek Harness：Agent = 模型 + 工程底座</a><time datetime="2026-10-17T03:33:25.000Z" title="发表于 2026-10-17 11:33:25">2026-10-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/09/27/dbx-database-client/" title="我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx">我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx</a><time datetime="2026-09-27T03:20:28.000Z" title="发表于 2026-09-27 11:20:28">2026-09-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/07/02/ms06-observability/" title="06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;">06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;</a><time datetime="2026-07-02T11:58:14.000Z" title="发表于 2026-07-02 19:58:14">2026-07-02</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/06/29/ms05-distributed-transaction/" title="05 — 分布式事务：从2PC到Seata">05 — 分布式事务：从2PC到Seata</a><time datetime="2026-06-29T13:41:52.000Z" title="发表于 2026-06-29 21:41:52">2026-06-29</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

@@ -1,0 +1,947 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>04 — 网关与统一鉴权：Gateway实战 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="网关与统一鉴权：Gateway实战核心知识点速览   知识点 要点    三大概念 Route（路由）、Predicate（断言）、Filter（过滤器）   技术底座 Spring WebFlux + Netty，全异步非阻塞   过滤器 全局 GlobalFilter vs 局部 GatewayFilter，靠 Ordered 排序   鉴权流程 白名单放行 → 解析 JWT → 校验 → 透">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04 — 网关与统一鉴权：Gateway实战">
+<meta property="og:url" content="https://chukui2005.github.io/2026/06/26/ms04-gateway/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="网关与统一鉴权：Gateway实战核心知识点速览   知识点 要点    三大概念 Route（路由）、Predicate（断言）、Filter（过滤器）   技术底座 Spring WebFlux + Netty，全异步非阻塞   过滤器 全局 GlobalFilter vs 局部 GatewayFilter，靠 Ordered 排序   鉴权流程 白名单放行 → 解析 JWT → 校验 → 透">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-06-26T12:56:39.000Z">
+<meta property="article:modified_time" content="2026-11-25T07:38:50.681Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="面试">
+<meta property="article:tag" content="微服务">
+<meta property="article:tag" content="Gateway">
+<meta property="article:tag" content="鉴权">
+<meta property="article:tag" content="JWT">
+<meta property="article:tag" content="限流">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "04 — 网关与统一鉴权：Gateway实战",
+  "url": "https://chukui2005.github.io/2026/06/26/ms04-gateway/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-06-26T12:56:39.000Z",
+  "dateModified": "2026-11-25T07:38:50.681Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/06/26/ms04-gateway/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '04 — 网关与统一鉴权：Gateway实战',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">04 — 网关与统一鉴权：Gateway实战</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">04 — 网关与统一鉴权：Gateway实战<a class="post-edit-link" href="null_posts/ms04-gateway.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-06-26T12:56:39.000Z" title="发表于 2026-06-26 20:56:39">2026-06-26</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-11-25T07:38:50.681Z" title="更新于 2026-11-25 15:38:50">2026-11-25</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/%E5%BE%AE%E6%9C%8D%E5%8A%A1/">微服务</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.9k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>7分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span>195</span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-11-25 15:38:50&quot;}" hidden></div><h1 id="网关与统一鉴权：Gateway实战"><a href="#网关与统一鉴权：Gateway实战" class="headerlink" title="网关与统一鉴权：Gateway实战"></a>网关与统一鉴权：Gateway实战</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>三大概念</td>
+<td>Route（路由）、Predicate（断言）、Filter（过滤器）</td>
+</tr>
+<tr>
+<td>技术底座</td>
+<td>Spring WebFlux + Netty，全异步非阻塞</td>
+</tr>
+<tr>
+<td>过滤器</td>
+<td>全局 GlobalFilter vs 局部 GatewayFilter，靠 Ordered 排序</td>
+</tr>
+<tr>
+<td>鉴权流程</td>
+<td>白名单放行 → 解析 JWT → 校验 → 透传用户信息</td>
+</tr>
+<tr>
+<td>限流</td>
+<td>RequestRateLimiter + Redis + Lua 令牌桶</td>
+</tr>
+<tr>
+<td>灰度</td>
+<td>按 Header &#x2F; 权重路由到不同实例</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、网关到底解决什么"><a href="#一、网关到底解决什么" class="headerlink" title="一、网关到底解决什么"></a>一、网关到底解决什么</h2><p>没有网关的时候，每个服务都要自己处理这些：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">跨域、鉴权、限流、日志、TraceId、灰度、协议转换、SSL 卸载</span><br></pre></td></tr></table></figure>
+
+<p>七八个服务各写一遍，改一次规则要改八处。网关就是把这些<strong>横切关注点</strong>收拢到入口处统一处理。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">客户端</span><br><span class="line">  ↓</span><br><span class="line">【网关】鉴权、限流、路由、日志、灰度</span><br><span class="line">  ↓</span><br><span class="line">业务服务（只关心业务）</span><br></pre></td></tr></table></figure>
+
+<p>顺带还有个好处：<strong>业务服务不用暴露公网</strong>，只开内网端口，安全边界清晰。</p>
+<hr>
+<h2 id="二、Gateway-的三大概念"><a href="#二、Gateway-的三大概念" class="headerlink" title="二、Gateway 的三大概念"></a>二、Gateway 的三大概念</h2><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">cloud:</span></span><br><span class="line">    <span class="attr">gateway:</span></span><br><span class="line">      <span class="attr">routes:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="attr">id:</span> <span class="string">order-route</span>                       <span class="comment"># 1. 路由 ID</span></span><br><span class="line">          <span class="attr">uri:</span> <span class="string">lb://order-service</span>               <span class="comment"># 目标（lb:// 走负载均衡）</span></span><br><span class="line">          <span class="attr">predicates:</span>                            <span class="comment"># 2. 断言：什么请求匹配这条路由</span></span><br><span class="line">            <span class="bullet">-</span> <span class="string">Path=/api/order/**</span></span><br><span class="line">            <span class="bullet">-</span> <span class="string">Method=GET,POST</span></span><br><span class="line">          <span class="attr">filters:</span>                               <span class="comment"># 3. 过滤器：匹配后做什么</span></span><br><span class="line">            <span class="bullet">-</span> <span class="string">StripPrefix=1</span></span><br><span class="line">            <span class="bullet">-</span> <span class="string">AddRequestHeader=X-Source,</span> <span class="string">gateway</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-1-Predicate（断言）"><a href="#2-1-Predicate（断言）" class="headerlink" title="2.1 Predicate（断言）"></a>2.1 Predicate（断言）</h3><p>决定”这个请求走不走这条路由”：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">Path=/api/order/**          路径匹配</span><br><span class="line">Method=POST                 方法匹配</span><br><span class="line">Header=X-Token, \d+         Header 匹配</span><br><span class="line">Query=debug, true           Query 参数</span><br><span class="line">Host=**.example.com         域名</span><br><span class="line">After/Before/Between       时间窗口（做灰度很方便）</span><br><span class="line">Weight=group1, 80           按权重分流</span><br></pre></td></tr></table></figure>
+
+<p>多条断言是<strong>与</strong>关系，多个路由之间按顺序匹配，<strong>先匹配到的生效</strong>。</p>
+<h3 id="2-2-Filter（过滤器）"><a href="#2-2-Filter（过滤器）" class="headerlink" title="2.2 Filter（过滤器）"></a>2.2 Filter（过滤器）</h3><p>两类：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">GatewayFilter（局部）  只对某条路由生效，配在 filters 里</span><br><span class="line">GlobalFilter（全局）   对所有路由生效，写代码实现</span><br></pre></td></tr></table></figure>
+
+<p>常见的局部过滤器：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">StripPrefix=1              去掉路径的第一段（/api/order/1 → /order/1）</span><br><span class="line">PrefixPath=/v1             加前缀</span><br><span class="line">RewritePath                正则重写</span><br><span class="line">AddRequestHeader           加请求头</span><br><span class="line">RequestRateLimiter         限流</span><br><span class="line">CircuitBreaker             熔断（集成 Resilience4j）</span><br><span class="line">Retry                      重试</span><br></pre></td></tr></table></figure>
+
+<p>执行顺序由 <code>Ordered</code> 决定，数字越小越先执行：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">请求进入 → 小 order 的 pre 逻辑 → ... → 大 order 的 pre 逻辑</span><br><span class="line">        → 转发到后端</span><br><span class="line">响应返回 → 大 order 的 post 逻辑 → ... → 小 order 的 post 逻辑</span><br></pre></td></tr></table></figure>
+
+<p>这种”洋葱模型”和 Servlet Filter 一样，<strong>请求正序、响应倒序</strong>。</p>
+<hr>
+<h2 id="三、为什么-Gateway-性能比-Zuul-好"><a href="#三、为什么-Gateway-性能比-Zuul-好" class="headerlink" title="三、为什么 Gateway 性能比 Zuul 好"></a>三、为什么 Gateway 性能比 Zuul 好</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Zuul 1.x：基于 Servlet，同步阻塞，一个请求占一个线程</span><br><span class="line">          高并发时线程池打满，直接拒绝</span><br><span class="line"></span><br><span class="line">Gateway：基于 WebFlux + Netty，事件驱动、非阻塞</span><br><span class="line">         少量线程处理大量连接，内存占用低</span><br></pre></td></tr></table></figure>
+
+<p>代价是：<strong>在 Gateway 里不能写阻塞代码</strong>（JDBC 查询、同步 HTTP 调用、<code>Thread.sleep</code>），一旦阻塞会拖死整个事件循环。</p>
+<p>真需要阻塞操作，要切到 <code>Schedulers.boundedElastic()</code> 线程池：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> Mono.fromCallable(() -&gt; blockingCall())</span><br><span class="line">           .subscribeOn(Schedulers.boundedElastic());</span><br></pre></td></tr></table></figure>
+
+<p>这是从 Zuul 迁到 Gateway 最常见的坑。</p>
+<hr>
+<h2 id="四、统一鉴权怎么做"><a href="#四、统一鉴权怎么做" class="headerlink" title="四、统一鉴权怎么做"></a>四、统一鉴权怎么做</h2><h3 id="4-1-整体流程"><a href="#4-1-整体流程" class="headerlink" title="4.1 整体流程"></a>4.1 整体流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">请求进来</span><br><span class="line">  ↓</span><br><span class="line">① 白名单？(/login /register /public/**) → 直接放行</span><br><span class="line">  ↓ 否</span><br><span class="line">② 取 Header 里的 Authorization: Bearer &lt;token&gt;</span><br><span class="line">  ↓ 没有 → 401</span><br><span class="line">③ 解析 JWT（验签 + 检查过期）</span><br><span class="line">  ↓ 失败 → 401</span><br><span class="line">④ 把用户信息写进请求头（X-User-Id、X-User-Role）</span><br><span class="line">  ↓</span><br><span class="line">⑤ 转发到下游服务</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-全局过滤器实现"><a href="#4-2-全局过滤器实现" class="headerlink" title="4.2 全局过滤器实现"></a>4.2 全局过滤器实现</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Component</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">AuthGlobalFilter</span> <span class="keyword">implements</span> <span class="title class_">GlobalFilter</span>, Ordered &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> List&lt;String&gt; WHITE_LIST = List.of(</span><br><span class="line">        <span class="string">&quot;/api/auth/login&quot;</span>, <span class="string">&quot;/api/auth/register&quot;</span>, <span class="string">&quot;/api/public/**&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> JwtUtils jwtUtils;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> Mono&lt;Void&gt; <span class="title function_">filter</span><span class="params">(ServerWebExchange exchange, GatewayFilterChain chain)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">path</span> <span class="operator">=</span> exchange.getRequest().getURI().getPath();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 1. 白名单放行</span></span><br><span class="line">        <span class="keyword">if</span> (WHITE_LIST.stream().anyMatch(p -&gt; <span class="keyword">new</span> <span class="title class_">AntPathMatcher</span>().match(p, path))) &#123;</span><br><span class="line">            <span class="keyword">return</span> chain.filter(exchange);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2. 取 token</span></span><br><span class="line">        <span class="type">String</span> <span class="variable">token</span> <span class="operator">=</span> exchange.getRequest().getHeaders().getFirst(<span class="string">&quot;Authorization&quot;</span>);</span><br><span class="line">        <span class="keyword">if</span> (token == <span class="literal">null</span> || !token.startsWith(<span class="string">&quot;Bearer &quot;</span>)) &#123;</span><br><span class="line">            <span class="keyword">return</span> unauthorized(exchange, <span class="string">&quot;未登录&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 3. 解析校验</span></span><br><span class="line">        Claims claims;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            claims = jwtUtils.parse(token.substring(<span class="number">7</span>));</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            <span class="keyword">return</span> unauthorized(exchange, <span class="string">&quot;token 无效或已过期&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 4. 透传用户信息（关键：用 mutate 修改请求头）</span></span><br><span class="line">        <span class="type">ServerHttpRequest</span> <span class="variable">mutated</span> <span class="operator">=</span> exchange.getRequest().mutate()</span><br><span class="line">            .header(<span class="string">&quot;X-User-Id&quot;</span>, claims.getSubject())</span><br><span class="line">            .header(<span class="string">&quot;X-User-Role&quot;</span>, claims.get(<span class="string">&quot;role&quot;</span>, String.class))</span><br><span class="line">            .build();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> chain.filter(exchange.mutate().request(mutated).build());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> Mono&lt;Void&gt; <span class="title function_">unauthorized</span><span class="params">(ServerWebExchange exchange, String msg)</span> &#123;</span><br><span class="line">        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);</span><br><span class="line">        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);</span><br><span class="line">        <span class="type">byte</span>[] body = (<span class="string">&quot;&#123;\&quot;code\&quot;:401,\&quot;msg\&quot;:\&quot;&quot;</span> + msg + <span class="string">&quot;\&quot;&#125;&quot;</span>).getBytes(StandardCharsets.UTF_8);</span><br><span class="line">        <span class="keyword">return</span> exchange.getResponse().writeWith(</span><br><span class="line">            Mono.just(exchange.getResponse().bufferFactory().wrap(body)));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="type">int</span> <span class="title function_">getOrder</span><span class="params">()</span> &#123; <span class="keyword">return</span> -<span class="number">100</span>; &#125;   <span class="comment">// 越早越好</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>几个细节：</p>
+<ul>
+<li><strong><code>exchange.mutate()</code> 才是正确改请求头的方式</strong>，直接 <code>getHeaders().add()</code> 在某些版本会不生效或被网关清理</li>
+<li><strong>下游服务信任网关</strong>：内网之间不再校验 token，只读 <code>X-User-Id</code>。所以内网必须隔离，否则伪造 Header 就能越权</li>
+<li><strong>JWT 无状态，没法主动失效</strong>：要强制下线，得配黑名单（Redis 存踢下线的 jti）</li>
+</ul>
+<h3 id="4-3-JWT-的几个注意点"><a href="#4-3-JWT-的几个注意点" class="headerlink" title="4.3 JWT 的几个注意点"></a>4.3 JWT 的几个注意点</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">① 不要放敏感信息（JWT 只是 Base64 编码，不是加密）</span><br><span class="line">② 设置合理过期时间（access token 2h，refresh token 7d）</span><br><span class="line">③ 签名密钥要足够长（HS256 至少 32 字节），生产用 RS256</span><br><span class="line">④ 不要在 URL 里传 token（会进日志、进浏览器历史）</span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="五、限流"><a href="#五、限流" class="headerlink" title="五、限流"></a>五、限流</h2><h3 id="5-1-令牌桶"><a href="#5-1-令牌桶" class="headerlink" title="5.1 令牌桶"></a>5.1 令牌桶</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">桶容量 N，每秒放入 M 个令牌</span><br><span class="line">请求来了取一个令牌，取不到就拒绝（或排队）</span><br><span class="line"></span><br><span class="line">特点：允许突发流量（桶里攒着的令牌可以一次性用掉）</span><br><span class="line">      长期平均速率 = M</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-Gateway-的-RequestRateLimiter"><a href="#5-2-Gateway-的-RequestRateLimiter" class="headerlink" title="5.2 Gateway 的 RequestRateLimiter"></a>5.2 Gateway 的 RequestRateLimiter</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">filters:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">RequestRateLimiter</span></span><br><span class="line">    <span class="attr">args:</span></span><br><span class="line">      <span class="attr">redis-rate-limiter.replenishRate:</span> <span class="number">100</span>    <span class="comment"># 每秒放 100 个令牌</span></span><br><span class="line">      <span class="attr">redis-rate-limiter.burstCapacity:</span> <span class="number">200</span>    <span class="comment"># 桶容量 200</span></span><br><span class="line">      <span class="attr">key-resolver:</span> <span class="string">&quot;#&#123;@ipKeyResolver&#125;&quot;</span>        <span class="comment"># 按什么维度限流</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line"><span class="keyword">public</span> KeyResolver <span class="title function_">ipKeyResolver</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> exchange -&gt; Mono.just(</span><br><span class="line">        exchange.getRequest().getRemoteAddress().getAddress().getHostAddress());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>底层是 <strong>Redis + Lua 脚本</strong>保证原子性（读令牌、扣减、回填在一个脚本里完成），所以网关多实例也能共享限流状态。</p>
+<h3 id="5-3-限流维度"><a href="#5-3-限流维度" class="headerlink" title="5.3 限流维度"></a>5.3 限流维度</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">按 IP          防爬虫、防刷接口</span><br><span class="line">按用户 ID      防单用户打爆（登录后）</span><br><span class="line">按接口         核心接口单独设阈值</span><br><span class="line">按租户         SaaS 场景，不同套餐不同额度</span><br></pre></td></tr></table></figure>
+
+<p>实践中通常<strong>组合使用</strong>：网关做粗粒度（IP &#x2F; 用户级），服务内部再做细粒度（核心方法级，用 Sentinel）。</p>
+<hr>
+<h2 id="六、灰度发布"><a href="#六、灰度发布" class="headerlink" title="六、灰度发布"></a>六、灰度发布</h2><p>Gateway 做灰度非常方便，两种方式：</p>
+<h3 id="6-1-按-Header-路由（最常用）"><a href="#6-1-按-Header-路由（最常用）" class="headerlink" title="6.1 按 Header 路由（最常用）"></a>6.1 按 Header 路由（最常用）</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="bullet">-</span> <span class="attr">id:</span> <span class="string">order-gray</span></span><br><span class="line">  <span class="attr">uri:</span> <span class="string">lb://order-service</span></span><br><span class="line">  <span class="attr">predicates:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">Path=/api/order/**</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">Header=X-Gray,</span> <span class="literal">true</span>        <span class="comment"># 只有带这个头的走新版本</span></span><br><span class="line">  <span class="attr">filters:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">StripPrefix=1</span></span><br></pre></td></tr></table></figure>
+
+<p>测试同学带上 <code>X-Gray: true</code> 就能访问新版本，其他用户不受影响。</p>
+<h3 id="6-2-按权重路由"><a href="#6-2-按权重路由" class="headerlink" title="6.2 按权重路由"></a>6.2 按权重路由</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="bullet">-</span> <span class="attr">id:</span> <span class="string">order-v1</span></span><br><span class="line">  <span class="attr">uri:</span> <span class="string">lb://order-service</span></span><br><span class="line">  <span class="attr">predicates:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">Path=/api/order/**</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">Weight=order-group,</span> <span class="number">90</span>     <span class="comment"># 90% 走旧版</span></span><br><span class="line"></span><br><span class="line"><span class="bullet">-</span> <span class="attr">id:</span> <span class="string">order-v2</span></span><br><span class="line">  <span class="attr">uri:</span> <span class="string">lb://order-service-v2</span></span><br><span class="line">  <span class="attr">predicates:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">Path=/api/order/**</span></span><br><span class="line">    <span class="bullet">-</span> <span class="string">Weight=order-group,</span> <span class="number">10</span>     <span class="comment"># 10% 走新版</span></span><br></pre></td></tr></table></figure>
+
+<p>配合 Nacos 的元数据（给实例打 <code>version=v2</code> 标签），还能做更精细的”同机房优先””金丝雀发布”。</p>
+<hr>
+<h2 id="七、面试重点清单"><a href="#七、面试重点清单" class="headerlink" title="七、面试重点清单"></a>七、面试重点清单</h2><ul>
+<li>网关的作用是什么？不做网关会有什么问题？</li>
+<li>Gateway 的三大概念分别是什么？</li>
+<li>为什么 Gateway 性能比 Zuul 1.x 好？代价是什么？</li>
+<li>在 Gateway 里能写阻塞代码吗？为什么不能？</li>
+<li>全局过滤器和局部过滤器的区别？执行顺序怎么定？</li>
+<li>网关做统一鉴权的完整流程？</li>
+<li>下游服务怎么拿到用户身份？为什么不重新校验 token？</li>
+<li>JWT 有什么缺点？怎么实现强制下线？</li>
+<li>令牌桶和漏桶的区别？限流为什么用 Redis + Lua？</li>
+<li>灰度发布怎么实现？按 Header 和按权重分别适合什么场景？</li>
+<li>网关怎么透传 TraceId？</li>
+</ul>
+<hr>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>网关这块要抓住两个核心：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">① 它是横切逻辑的收口点：鉴权、限流、日志、灰度都在这做一件事，别让业务服务重复实现</span><br><span class="line">② 它是异步模型：写阻塞代码就是给自己埋雷</span><br></pre></td></tr></table></figure>
+
+<p>下一篇是微服务里最硬的一块：分布式事务，从 2PC 到 Seata AT 模式。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/06/26/ms04-gateway/">https://chukui2005.github.io/2026/06/26/ms04-gateway/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/%E9%9D%A2%E8%AF%95/">面试</a><a class="post-meta__tags" href="/blog/tags/%E5%BE%AE%E6%9C%8D%E5%8A%A1/">微服务</a><a class="post-meta__tags" href="/blog/tags/Gateway/">Gateway</a><a class="post-meta__tags" href="/blog/tags/%E9%89%B4%E6%9D%83/">鉴权</a><a class="post-meta__tags" href="/blog/tags/JWT/">JWT</a><a class="post-meta__tags" href="/blog/tags/%E9%99%90%E6%B5%81/">限流</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/06/29/ms05-distributed-transaction/" title="05 — 分布式事务：从2PC到Seata"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">05 — 分布式事务：从2PC到Seata</div></div><div class="info-2"><div class="info-item-1">分布式事务：从2PC到Seata核心知识点速览   知识点 要点    为什么需要 跨库跨服务，本地事务管不了   理论基础 CAP、BASE、ACID 的取舍   2PC&#x2F;XA 准备 + 提交，同步阻塞，协调者单点   TCC Try-Confirm-Cancel，业务补偿，要防空回滚&#x2F;悬挂&#x2F;幂等   Saga 正向执行 + 反向补偿，适合长流程   可靠消息 本地消息表 &#x2F; RocketMQ 事务消息   Seata AT 一阶段业务SQL+undo log+全局锁，二阶段提交或反向补偿    一、问题从哪来123456@Transactionalpublic void createOrder() &#123;    orderDao.insert(order);            // 订单库    stockClient.lock(skuId, count);    // 库存服务（另一个库）    couponClient.use(couponId);        // 营销服务（另一个库）&#125;  @Transact...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/23/ms03-rpc/" title="03 — RPC与远程调用：Feign原理与超时重试的坑"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">03 — RPC与远程调用：Feign原理与超时重试的坑</div></div><div class="info-2"><div class="info-item-1">RPC与远程调用：Feign原理与超时重试的坑核心知识点速览   知识点 要点    Feign 本质 声明式 HTTP 客户端，靠动态代理生成实现   核心链路 动态代理 → Contract 解析 → 编码 → 负载均衡 → 发送 → 解码   负载均衡 轮询、随机、权重、最小连接数、一致性哈希   超时设计 调用方超时 &lt; 服务提供方处理时间 + 网络延迟   重试风险 非幂等接口重试 &#x3D; 数据重复，重试还会放大流量   Feign vs Dubbo HTTP 文本协议 vs 二进制私有协议 + 长连接    一、Feign 是什么一句话：让你像调本地方法一样调 HTTP 接口。 1234567@FeignClient(name = &quot;stock-service&quot;, fallback = StockFallback.class)public interface StockClient &#123;    @PostMapping(&quot;/stock/lock&quot;)    Result&lt;Void&gt; lock(@Re...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/06/20/ms02-nacos/" title="02 — 注册中心与配置中心：Nacos实战与原理"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-20</div><div class="info-item-2">02 — 注册中心与配置中心：Nacos实战与原理</div></div><div class="info-2"><div class="info-item-1">注册中心与配置中心：Nacos实战与原理核心知识点速览   知识点 要点    注册中心解决 服务实例地址动态变化，调用方要能发现   Nacos 双模式 临时实例 AP（Distro）&#x2F; 持久实例 CP（Raft）   健康检查 临时实例客户端心跳，持久实例服务端探测   配置中心 DataId + Group + Namespace 三级隔离   配置推送 客户端长轮询（30s）+ MD5 比对 + 本地快照   热更新 @RefreshScope，靠重建 Bean 生效   常见坑 静态字段、final、连接池参数不生效    一、为什么需要注册中心微服务里服务实例的 IP 是动态的： 12345服务 A 要调服务 B    B 有 5 个实例，部署在 10.0.1.5:8080 ~ 10.0.1.9:8080    明天扩容到 8 个，后天有 2 个挂掉重启换了 IPA 怎么知道该调谁？  三种方案对比： 123456789① 写死在配置文件里   → 一扩容就要改配置重启，不可行② 用 Nginx 做静态负载均衡   → Nginx 的 upstream 还是...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/17/ms01-split/" title="01 — 微服务拆分：什么时候该拆，怎么拆"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-17</div><div class="info-item-2">01 — 微服务拆分：什么时候该拆，怎么拆</div></div><div class="info-2"><div class="info-item-1">微服务拆分：什么时候该拆，怎么拆核心知识点速览   知识点 要点    本质 微服务是组织问题，不是技术问题   拆分依据 业务能力、DDD 限界上下文、团队边界（康威定律）   拆分标准 能独立部署、独立数据库、独立迭代   拆分的代价 分布式事务、网络不可靠、链路变长、运维复杂度上升   常见反模式 分布式单体、共享数据库、纳米服务   分层结构 网关&#x2F;BFF → 业务服务 → 基础服务    一、先说一个反常识的结论微服务不是”更先进的架构”，它是用复杂度换扩展性。 123456789单体应用：    一个进程、一个数据库、一次部署    优点：简单、事务好做、调试方便、性能高（方法调用 vs 网络调用）    缺点：代码耦合、团队互相阻塞、一处改动全量发布、不能按模块扩容微服务：    多个进程、多个数据库、多次部署    优点：独立迭代、独立扩容、故障隔离、技术栈自由    缺点：分布式事务、网络不可靠、链路追踪、运维成本翻倍  所以正确的判断不是”要不要上微服务”，而是：当前的组织和业务规模，是否已经让单体的缺点压过了优点。 几个典型信号： 12345✓ 团...</div></div></div></a><a class="pagination-related" href="/blog/2026/02/08/spring07-cloud/" title="07 — Spring Cloud 核心组件"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-02-08</div><div class="info-item-2">07 — Spring Cloud 核心组件</div></div><div class="info-2"><div class="info-item-1">核心知识点速览   知识点 要点    微服务是什么 将单体拆分为多个独立服务，各自独立部署&#x2F;扩展   Spring Cloud 微服务治理全家桶（注册&#x2F;调用&#x2F;网关&#x2F;熔断&#x2F;配置）   Nacos 注册中心 + 配置中心，AP+CP 混合   Feign 声明式 HTTP 客户端，像调本地方法一样调远程   Gateway API 网关，路由+过滤+断言，替代 Zuul   Sentinel 流量控制&#x2F;熔断降级&#x2F;热点限流   LoadBalancer 客户端负载均衡，替代 Ribbon      一、微服务架构概述1.1 单体应用 vs 微服务   对比维度 单体应用 微服务    部署 一个包部署 每个服务独立部署   扩展 整体扩展（浪费资源） 按需扩展（精确扩展）   技术栈 单一语言 各服务可用不同语言   团队协作 改同一个项目，冲突多 各团队维护各自服务   运维复杂度 低 高（需要注册中心、配置中心、网关等）   1.2 微服务核心组件123456789101112131415161718客户端请求...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/29/ms05-distributed-transaction/" title="05 — 分布式事务：从2PC到Seata"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-29</div><div class="info-item-2">05 — 分布式事务：从2PC到Seata</div></div><div class="info-2"><div class="info-item-1">分布式事务：从2PC到Seata核心知识点速览   知识点 要点    为什么需要 跨库跨服务，本地事务管不了   理论基础 CAP、BASE、ACID 的取舍   2PC&#x2F;XA 准备 + 提交，同步阻塞，协调者单点   TCC Try-Confirm-Cancel，业务补偿，要防空回滚&#x2F;悬挂&#x2F;幂等   Saga 正向执行 + 反向补偿，适合长流程   可靠消息 本地消息表 &#x2F; RocketMQ 事务消息   Seata AT 一阶段业务SQL+undo log+全局锁，二阶段提交或反向补偿    一、问题从哪来123456@Transactionalpublic void createOrder() &#123;    orderDao.insert(order);            // 订单库    stockClient.lock(skuId, count);    // 库存服务（另一个库）    couponClient.use(couponId);        // 营销服务（另一个库）&#125;  @Transact...</div></div></div></a><a class="pagination-related" href="/blog/2026/06/23/ms03-rpc/" title="03 — RPC与远程调用：Feign原理与超时重试的坑"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-06-23</div><div class="info-item-2">03 — RPC与远程调用：Feign原理与超时重试的坑</div></div><div class="info-2"><div class="info-item-1">RPC与远程调用：Feign原理与超时重试的坑核心知识点速览   知识点 要点    Feign 本质 声明式 HTTP 客户端，靠动态代理生成实现   核心链路 动态代理 → Contract 解析 → 编码 → 负载均衡 → 发送 → 解码   负载均衡 轮询、随机、权重、最小连接数、一致性哈希   超时设计 调用方超时 &lt; 服务提供方处理时间 + 网络延迟   重试风险 非幂等接口重试 &#x3D; 数据重复，重试还会放大流量   Feign vs Dubbo HTTP 文本协议 vs 二进制私有协议 + 长连接    一、Feign 是什么一句话：让你像调本地方法一样调 HTTP 接口。 1234567@FeignClient(name = &quot;stock-service&quot;, fallback = StockFallback.class)public interface StockClient &#123;    @PostMapping(&quot;/stock/lock&quot;)    Result&lt;Void&gt; lock(@Re...</div></div></div></a><a class="pagination-related" href="/blog/2026/07/02/ms06-observability/" title="06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-07-02</div><div class="info-item-2">06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;</div></div><div class="info-2"><div class="info-item-1">可观测性与高可用：微服务怎么”看得见、扛得住”核心知识点速览   知识点 要点    三大支柱 日志（Logs）、指标（Metrics）、链路（Traces）   TraceId 全局唯一，跨服务&#x2F;跨 MQ 透传，串起整条链路   四大黄金信号 延迟、流量、错误、饱和度   熔断状态机 关闭 → 打开 → 半开   隔离方式 线程池隔离（强隔离）vs 信号量隔离（轻量）   高可用手段 限流、降级、超时、重试、多副本、混沌演练    一、为什么微服务必须做可观测性单体时代排障： 1看一个日志文件 → 找到异常栈 → 定位代码行  微服务时代排障： 123一次请求经过了：网关 → 订单 → 库存 → 支付 → 优惠券 → MQ → 积分日志散在 8 台机器、6 个服务、3 个中间件里用户只说&quot;下单失败了&quot;  没有可观测性，你连”哪个服务出的问题”都不知道。  二、三大支柱2.1 日志（Logs）要解决的问题：日志太多找不到，日志太少定位不了。 123456logging:  pattern:    console: &quot;%d&#123;yyyy...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">79</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">277</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">16</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E7%BD%91%E5%85%B3%E4%B8%8E%E7%BB%9F%E4%B8%80%E9%89%B4%E6%9D%83%EF%BC%9AGateway%E5%AE%9E%E6%88%98"><span class="toc-number">1.</span> <span class="toc-text">网关与统一鉴权：Gateway实战</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E7%BD%91%E5%85%B3%E5%88%B0%E5%BA%95%E8%A7%A3%E5%86%B3%E4%BB%80%E4%B9%88"><span class="toc-number">1.2.</span> <span class="toc-text">一、网关到底解决什么</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Gateway-%E7%9A%84%E4%B8%89%E5%A4%A7%E6%A6%82%E5%BF%B5"><span class="toc-number">1.3.</span> <span class="toc-text">二、Gateway 的三大概念</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Predicate%EF%BC%88%E6%96%AD%E8%A8%80%EF%BC%89"><span class="toc-number">1.3.1.</span> <span class="toc-text">2.1 Predicate（断言）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-Filter%EF%BC%88%E8%BF%87%E6%BB%A4%E5%99%A8%EF%BC%89"><span class="toc-number">1.3.2.</span> <span class="toc-text">2.2 Filter（过滤器）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E4%B8%BA%E4%BB%80%E4%B9%88-Gateway-%E6%80%A7%E8%83%BD%E6%AF%94-Zuul-%E5%A5%BD"><span class="toc-number">1.4.</span> <span class="toc-text">三、为什么 Gateway 性能比 Zuul 好</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E7%BB%9F%E4%B8%80%E9%89%B4%E6%9D%83%E6%80%8E%E4%B9%88%E5%81%9A"><span class="toc-number">1.5.</span> <span class="toc-text">四、统一鉴权怎么做</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B"><span class="toc-number">1.5.1.</span> <span class="toc-text">4.1 整体流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E5%85%A8%E5%B1%80%E8%BF%87%E6%BB%A4%E5%99%A8%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.5.2.</span> <span class="toc-text">4.2 全局过滤器实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-JWT-%E7%9A%84%E5%87%A0%E4%B8%AA%E6%B3%A8%E6%84%8F%E7%82%B9"><span class="toc-number">1.5.3.</span> <span class="toc-text">4.3 JWT 的几个注意点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E9%99%90%E6%B5%81"><span class="toc-number">1.6.</span> <span class="toc-text">五、限流</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E4%BB%A4%E7%89%8C%E6%A1%B6"><span class="toc-number">1.6.1.</span> <span class="toc-text">5.1 令牌桶</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-Gateway-%E7%9A%84-RequestRateLimiter"><span class="toc-number">1.6.2.</span> <span class="toc-text">5.2 Gateway 的 RequestRateLimiter</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E9%99%90%E6%B5%81%E7%BB%B4%E5%BA%A6"><span class="toc-number">1.6.3.</span> <span class="toc-text">5.3 限流维度</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E7%81%B0%E5%BA%A6%E5%8F%91%E5%B8%83"><span class="toc-number">1.7.</span> <span class="toc-text">六、灰度发布</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E6%8C%89-Header-%E8%B7%AF%E7%94%B1%EF%BC%88%E6%9C%80%E5%B8%B8%E7%94%A8%EF%BC%89"><span class="toc-number">1.7.1.</span> <span class="toc-text">6.1 按 Header 路由（最常用）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E6%8C%89%E6%9D%83%E9%87%8D%E8%B7%AF%E7%94%B1"><span class="toc-number">1.7.2.</span> <span class="toc-text">6.2 按权重路由</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E9%9D%A2%E8%AF%95%E9%87%8D%E7%82%B9%E6%B8%85%E5%8D%95"><span class="toc-number">1.8.</span> <span class="toc-text">七、面试重点清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B0%8F%E7%BB%93"><span class="toc-number">1.9.</span> <span class="toc-text">小结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/11/20/gitglass/" title="我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交">我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交</a><time datetime="2026-11-20T03:01:39.000Z" title="发表于 2026-11-20 11:01:39">2026-11-20</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/10/17/deepseek-harness/" title="01 — DeepSeek Harness：Agent = 模型 + 工程底座">01 — DeepSeek Harness：Agent = 模型 + 工程底座</a><time datetime="2026-10-17T03:33:25.000Z" title="发表于 2026-10-17 11:33:25">2026-10-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/09/27/dbx-database-client/" title="我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx">我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx</a><time datetime="2026-09-27T03:20:28.000Z" title="发表于 2026-09-27 11:20:28">2026-09-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/07/02/ms06-observability/" title="06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;">06 — 可观测性与高可用：微服务怎么&quot;看得见、扛得住&quot;</a><time datetime="2026-07-02T11:58:14.000Z" title="发表于 2026-07-02 19:58:14">2026-07-02</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/06/29/ms05-distributed-transaction/" title="05 — 分布式事务：从2PC到Seata">05 — 分布式事务：从2PC到Seata</a><time datetime="2026-06-29T13:41:52.000Z" title="发表于 2026-06-29 21:41:52">2026-06-29</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
