@@ -1,3 +1,4 @@
+https://chukui2005.github.io/2026/05/06/postgresql01-basics/
 https://chukui2005.github.io/2026/11/20/gitglass/
 https://chukui2005.github.io/2026/09/27/dbx-database-client/
 https://chukui2005.github.io/2026/05/03/milvus01-basics/
@@ -271,6 +272,9 @@ https://chukui2005.github.io/tags/Electron/
 https://chukui2005.github.io/tags/React/
 https://chukui2005.github.io/tags/TypeScript/
 https://chukui2005.github.io/tags/%E6%A1%8C%E9%9D%A2%E5%BA%94%E7%94%A8/
+https://chukui2005.github.io/tags/PostgreSQL/
+https://chukui2005.github.io/tags/WAL/
+https://chukui2005.github.io/tags/%E5%A4%8D%E5%88%B6/
 https://chukui2005.github.io/categories/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/
 https://chukui2005.github.io/categories/%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E/
 https://chukui2005.github.io/categories/Java%E5%9F%BA%E7%A1%80/
@@ -281,3 +285,4 @@ https://chukui2005.github.io/categories/MySQL/
 https://chukui2005.github.io/categories/%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE/
 https://chukui2005.github.io/categories/Redis/
 https://chukui2005.github.io/categories/Spring%E5%85%A8%E5%AE%B6%E6%A1%B6/
+https://chukui2005.github.io/categories/PostgreSQL/

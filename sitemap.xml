@@ -2,6 +2,15 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://chukui2005.github.io/2026/05/06/postgresql01-basics/</loc>
+    
+    <lastmod>2026-11-25</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://chukui2005.github.io/2026/11/20/gitglass/</loc>
     
     <lastmod>2026-11-25</lastmod>
@@ -2034,6 +2043,27 @@
     <priority>0.2</priority>
   </url>
   
+  <url>
+    <loc>https://chukui2005.github.io/tags/PostgreSQL/</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/tags/WAL/</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/tags/%E5%A4%8D%E5%88%B6/</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
 
   
   <url>
@@ -2101,6 +2131,13 @@
   
   <url>
     <loc>https://chukui2005.github.io/categories/Spring%E5%85%A8%E5%AE%B6%E6%A1%B6/</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://chukui2005.github.io/categories/PostgreSQL/</loc>
     <lastmod>2026-11-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
