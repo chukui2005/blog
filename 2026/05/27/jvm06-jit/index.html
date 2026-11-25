@@ -1,0 +1,962 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>06 — JIT编译与执行引擎：代码到底怎么跑起来的 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="JIT编译与执行引擎：代码到底怎么跑起来的核心知识点速览   知识点 要点    执行方式 解释执行 + 即时编译（JIT）混合   热点探测 方法计数器 &#x2F; 回边计数器   编译分层 C1（快、浅优化）、C2（慢、深优化）、分层编译   逃逸分析 对象不逃逸 → 栈上分配、标量替换、锁消除   常见优化 方法内联、公共子表达式消除、循环展开、去虚拟化   逆优化 假设被打破，退回解释执">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06 — JIT编译与执行引擎：代码到底怎么跑起来的">
+<meta property="og:url" content="https://chukui2005.github.io/2026/05/27/jvm06-jit/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="JIT编译与执行引擎：代码到底怎么跑起来的核心知识点速览   知识点 要点    执行方式 解释执行 + 即时编译（JIT）混合   热点探测 方法计数器 &#x2F; 回边计数器   编译分层 C1（快、浅优化）、C2（慢、深优化）、分层编译   逃逸分析 对象不逃逸 → 栈上分配、标量替换、锁消除   常见优化 方法内联、公共子表达式消除、循环展开、去虚拟化   逆优化 假设被打破，退回解释执">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-05-27T13:22:39.000Z">
+<meta property="article:modified_time" content="2026-11-25T07:23:54.515Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="JVM">
+<meta property="article:tag" content="面试">
+<meta property="article:tag" content="JIT">
+<meta property="article:tag" content="编译器">
+<meta property="article:tag" content="逃逸分析">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "06 — JIT编译与执行引擎：代码到底怎么跑起来的",
+  "url": "https://chukui2005.github.io/2026/05/27/jvm06-jit/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-05-27T13:22:39.000Z",
+  "dateModified": "2026-11-25T07:23:54.515Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/05/27/jvm06-jit/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '06 — JIT编译与执行引擎：代码到底怎么跑起来的',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">06 — JIT编译与执行引擎：代码到底怎么跑起来的</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">06 — JIT编译与执行引擎：代码到底怎么跑起来的<a class="post-edit-link" href="null_posts/jvm06-jit.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-05-27T13:22:39.000Z" title="发表于 2026-05-27 21:22:39">2026-05-27</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-11-25T07:23:54.515Z" title="更新于 2026-11-25 15:23:54">2026-11-25</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/JVM/">JVM</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">2.4k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>8分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span>287</span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-11-25 15:23:54&quot;}" hidden></div><h1 id="JIT编译与执行引擎：代码到底怎么跑起来的"><a href="#JIT编译与执行引擎：代码到底怎么跑起来的" class="headerlink" title="JIT编译与执行引擎：代码到底怎么跑起来的"></a>JIT编译与执行引擎：代码到底怎么跑起来的</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>执行方式</td>
+<td>解释执行 + 即时编译（JIT）混合</td>
+</tr>
+<tr>
+<td>热点探测</td>
+<td>方法计数器 &#x2F; 回边计数器</td>
+</tr>
+<tr>
+<td>编译分层</td>
+<td>C1（快、浅优化）、C2（慢、深优化）、分层编译</td>
+</tr>
+<tr>
+<td>逃逸分析</td>
+<td>对象不逃逸 → 栈上分配、标量替换、锁消除</td>
+</tr>
+<tr>
+<td>常见优化</td>
+<td>方法内联、公共子表达式消除、循环展开、去虚拟化</td>
+</tr>
+<tr>
+<td>逆优化</td>
+<td>假设被打破，退回解释执行</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、Java-为什么”编译-解释”两条腿走路"><a href="#一、Java-为什么”编译-解释”两条腿走路" class="headerlink" title="一、Java 为什么”编译 + 解释”两条腿走路"></a>一、Java 为什么”编译 + 解释”两条腿走路</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">Java 源码 (.java)</span><br><span class="line">    ↓ javac</span><br><span class="line">字节码 (.class)</span><br><span class="line">    ↓</span><br><span class="line">┌─────────────────────────────────────┐</span><br><span class="line">│ 执行引擎                              │</span><br><span class="line">│   解释器：逐条读字节码执行，启动快       │</span><br><span class="line">│   JIT编译器：把热点代码编译成本地机器码   │</span><br><span class="line">│   混合模式（默认）：两者配合            │</span><br><span class="line">└─────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<p>为什么不直接全部编译成机器码（像 C++）？</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">纯解释：启动快，但每条指令都要翻译，运行慢</span><br><span class="line">纯编译：运行快，但编译本身耗时，启动慢，还要处理平台差异</span><br><span class="line">混合：先解释执行（快速启动），热点代码再编译（长期跑得快）</span><br></pre></td></tr></table></figure>
+
+<p>这也解释了一个现象：<strong>Java 服务刚启动时慢，跑一会儿就快了</strong>——预热（warm up）说的就是这个。</p>
+<p>Spring Boot 启动慢、压测第一分钟 TPS 明显低，都是这个原因。</p>
+<hr>
+<h2 id="二、热点探测：哪些代码值得编译"><a href="#二、热点探测：哪些代码值得编译" class="headerlink" title="二、热点探测：哪些代码值得编译"></a>二、热点探测：哪些代码值得编译</h2><p>JVM 不会把”编译过的方法”再编译一遍，也不会编译只跑过一次的方法。判断标准是”热度”。</p>
+<h3 id="2-1-基于采样的热点探测"><a href="#2-1-基于采样的热点探测" class="headerlink" title="2.1 基于采样的热点探测"></a>2.1 基于采样的热点探测</h3><p>定期看线程栈顶，某个方法经常出现在栈顶，就是热点方法。</p>
+<ul>
+<li>优点：简单，能发现”一个方法里嵌了很多小方法”的整体热点</li>
+<li>缺点：不精确，受线程阻塞影响</li>
+</ul>
+<h3 id="2-2-基于计数器的热点探测（HotSpot-采用）"><a href="#2-2-基于计数器的热点探测（HotSpot-采用）" class="headerlink" title="2.2 基于计数器的热点探测（HotSpot 采用）"></a>2.2 基于计数器的热点探测（HotSpot 采用）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">方法调用计数器</span><br><span class="line">    方法被调用一次 +1，超过阈值（-XX:CompileThreshold，默认 10000）</span><br><span class="line">    → 提交编译请求（后台编译，不阻塞执行）</span><br><span class="line"></span><br><span class="line">回边计数器</span><br><span class="line">    统计一个方法中循环体执行的次数（字节码的 goto 回跳）</span><br><span class="line">    超过阈值（默认 10700 左右，实际是 OSR 阈值）</span><br><span class="line">    → 触发栈上替换编译（OSR，On-Stack Replacement）</span><br></pre></td></tr></table></figure>
+
+<p><strong>OSR 很关键</strong>：一个方法里有死循环，方法本身只调用了一次，但循环跑了几万次——这时候 JVM 不会等你方法执行完再编译，而是直接把正在执行的循环替换成编译后的版本。</p>
+<p>计数器还有”热度衰减”：一段时间内没被调用，计数会减半（<code>-XX:-UseCounterDecay</code> 可关闭），避免以前的冷代码一直占着编译队列。</p>
+<hr>
+<h2 id="三、C1-和-C2"><a href="#三、C1-和-C2" class="headerlink" title="三、C1 和 C2"></a>三、C1 和 C2</h2><p>HotSpot 里有两个 JIT 编译器：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">C1（Client Compiler）</span><br><span class="line">    编译快，优化浅</span><br><span class="line">    只做局部优化：方法内联、去虚拟化、冗余消除</span><br><span class="line">    目标是&quot;尽快让代码跑得快一点&quot;</span><br><span class="line"></span><br><span class="line">C2（Server Compiler）</span><br><span class="line">    编译慢，优化深</span><br><span class="line">    做激进优化：逃逸分析、标量替换、循环展开、全局值编号</span><br><span class="line">    需要收集运行时的类型信息（profiling），所以更准也更慢</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-1-分层编译（JDK7-后默认）"><a href="#3-1-分层编译（JDK7-后默认）" class="headerlink" title="3.1 分层编译（JDK7 后默认）"></a>3.1 分层编译（JDK7 后默认）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">第 0 层：解释执行</span><br><span class="line">第 1 层：C1 编译，不做 profiling</span><br><span class="line">第 2 层：C1 编译，做基础 profiling（方法调用次数、回边次数）</span><br><span class="line">第 3 层：C1 编译，做完整 profiling（额外收集分支跳转、类型信息）</span><br><span class="line">第 4 层：C2 编译，用第 3 层收集的信息做激进优化</span><br></pre></td></tr></table></figure>
+
+<p>典型路径：<code>0 → 3 → 4</code>（先 C1 带 profiling 跑着，同时后台让 C2 慢慢编译高质量版本）。</p>
+<p>分层编译的收益：<strong>启动阶段用 C1 快速提供中等性能，运行稳定后 C2 接管提供峰值性能</strong>——两头的好处都要了。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-XX:-TieredCompilation     <span class="comment"># 关掉分层编译，只用 C2（启动更慢，峰值略高）</span></span><br><span class="line">-XX:TieredStopAtLevel=1    <span class="comment"># 只到 C1，适合短生命周期的命令行程序</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="四、逃逸分析：最容易被问的-JIT-优化"><a href="#四、逃逸分析：最容易被问的-JIT-优化" class="headerlink" title="四、逃逸分析：最容易被问的 JIT 优化"></a>四、逃逸分析：最容易被问的 JIT 优化</h2><h3 id="4-1-什么是逃逸"><a href="#4-1-什么是逃逸" class="headerlink" title="4.1 什么是逃逸"></a>4.1 什么是逃逸</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">方法逃逸：对象被作为返回值返回，或者赋给类字段/静态字段</span><br><span class="line">线程逃逸：对象被其他线程访问到（赋给静态字段、放进共享容器）</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 不逃逸：对象只在方法内部使用，方法结束就死</span></span><br><span class="line"><span class="keyword">public</span> <span class="type">int</span> <span class="title function_">calc</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="type">Point</span> <span class="variable">p</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Point</span>(<span class="number">1</span>, <span class="number">2</span>);   <span class="comment">// p 没有逃出 calc</span></span><br><span class="line">    <span class="keyword">return</span> p.x + p.y;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 方法逃逸：返回给调用方</span></span><br><span class="line"><span class="keyword">public</span> Point <span class="title function_">create</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">Point</span>(<span class="number">1</span>, <span class="number">2</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 线程逃逸：放进共享 map</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">register</span><span class="params">(String k, Object v)</span> &#123;</span><br><span class="line">    SHARED_MAP.put(k, v);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-逃逸分析后能做三件事"><a href="#4-2-逃逸分析后能做三件事" class="headerlink" title="4.2 逃逸分析后能做三件事"></a>4.2 逃逸分析后能做三件事</h3><p><strong>① 栈上分配</strong></p>
+<p>如果对象不逃逸，完全可以分配在栈上，方法返回时随栈帧一起销毁，<strong>不用 GC 收拾</strong>。</p>
+<blockquote>
+<p>注意一个常见误区：HotSpot 实际上**没有真正实现”栈上分配”**，它用的是标量替换达到类似效果。面试如果被追问，能说出这点是加分项。</p>
+</blockquote>
+<p><strong>② 标量替换（Scalar Replacement）</strong></p>
+<p>把对象拆成若干基本类型变量，直接放在寄存器&#x2F;栈上：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 原始代码</span></span><br><span class="line"><span class="type">Point</span> <span class="variable">p</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Point</span>(<span class="number">1</span>, <span class="number">2</span>);</span><br><span class="line"><span class="type">int</span> <span class="variable">sum</span> <span class="operator">=</span> p.x + p.y;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 标量替换后（等价于）</span></span><br><span class="line"><span class="type">int</span> <span class="variable">x</span> <span class="operator">=</span> <span class="number">1</span>, y = <span class="number">2</span>;</span><br><span class="line"><span class="type">int</span> <span class="variable">sum</span> <span class="operator">=</span> x + y;</span><br></pre></td></tr></table></figure>
+
+<p>对象根本没被创建，自然没有分配和 GC 开销。</p>
+<p><strong>③ 锁消除（Lock Elision）</strong></p>
+<p>如果对象不逃逸，那么对它的同步就毫无意义，直接干掉：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> String <span class="title function_">concat</span><span class="params">(String a, String b)</span> &#123;</span><br><span class="line">    <span class="type">StringBuffer</span> <span class="variable">sb</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">StringBuffer</span>();  <span class="comment">// StringBuffer 方法都是 synchronized</span></span><br><span class="line">    sb.append(a).append(b);                <span class="comment">// 但 sb 不逃逸 → 锁被消除</span></span><br><span class="line">    <span class="keyword">return</span> sb.toString();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这就是为什么”用 StringBuffer 一定比 StringBuilder 慢”不一定成立——单线程短生命周期场景，JIT 会把锁去掉。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-XX:+DoEscapeAnalysis     <span class="comment"># 默认开启（JDK8+）</span></span><br><span class="line">-XX:+EliminateAllocations <span class="comment"># 标量替换开关</span></span><br><span class="line">-XX:+EliminateLocks       <span class="comment"># 锁消除开关</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="五、其他常见优化"><a href="#五、其他常见优化" class="headerlink" title="五、其他常见优化"></a>五、其他常见优化</h2><h3 id="5-1-方法内联"><a href="#5-1-方法内联" class="headerlink" title="5.1 方法内联"></a>5.1 方法内联</h3><p>最基础也最有效的优化：把小方法的代码直接贴到调用处，省掉调用开销，还能为后续优化打开空间。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 内联前</span></span><br><span class="line"><span class="type">int</span> <span class="variable">a</span> <span class="operator">=</span> add(<span class="number">1</span>, <span class="number">2</span>);</span><br><span class="line"><span class="comment">// 内联后</span></span><br><span class="line"><span class="type">int</span> <span class="variable">a</span> <span class="operator">=</span> <span class="number">1</span> + <span class="number">2</span>;</span><br></pre></td></tr></table></figure>
+
+<p>内联之后，常量折叠、死代码消除才有机会生效。所以<strong>getter&#x2F;setter 这类小方法不用担心性能</strong>，JIT 会处理。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-XX:MaxInlineSize=35          <span class="comment"># 字节码小于 35 的方法默认内联</span></span><br><span class="line">-XX:FreqInlineSize=325        <span class="comment"># 热点方法放宽到 325</span></span><br></pre></td></tr></table></figure>
+
+<p>内联也有副作用：<strong>CodeCache 会膨胀</strong>，方法太大内联失败。</p>
+<h3 id="5-2-去虚拟化"><a href="#5-2-去虚拟化" class="headerlink" title="5.2 去虚拟化"></a>5.2 去虚拟化</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">interface</span> <span class="title class_">Pay</span> &#123; <span class="keyword">void</span> <span class="title function_">pay</span><span class="params">()</span>; &#125;</span><br><span class="line"><span class="comment">// 运行时只有 AlipayPay 一个实现</span></span><br><span class="line"><span class="type">Pay</span> <span class="variable">p</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">AlipayPay</span>();</span><br><span class="line">p.pay();   <span class="comment">// JIT 收集到类型信息 → 直接调 AlipayPay.pay，省掉虚方法查找</span></span><br></pre></td></tr></table></figure>
+
+<p>单态调用（只有一个实现）最容易优化，多态（多个实现）就得退回查虚表。</p>
+<h3 id="5-3-公共子表达式消除、循环展开、边界检查消除"><a href="#5-3-公共子表达式消除、循环展开、边界检查消除" class="headerlink" title="5.3 公共子表达式消除、循环展开、边界检查消除"></a>5.3 公共子表达式消除、循环展开、边界检查消除</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 公共子表达式</span></span><br><span class="line"><span class="type">int</span> <span class="variable">x</span> <span class="operator">=</span> a*b + a*b;      <span class="comment">// → int t = a*b; int x = t + t;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 循环展开</span></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">4</span>; i++) sum += arr[i];</span><br><span class="line"><span class="comment">// → sum += arr[0]+arr[1]+arr[2]+arr[3];</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 边界检查消除</span></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; arr.length; i++) sum += arr[i];</span><br><span class="line"><span class="comment">// i &lt; arr.length 保证了不越界 → 省掉每次的 check</span></span><br></pre></td></tr></table></figure>
+
+<hr>
+<h2 id="六、逆优化（Deoptimization）"><a href="#六、逆优化（Deoptimization）" class="headerlink" title="六、逆优化（Deoptimization）"></a>六、逆优化（Deoptimization）</h2><p>C2 的激进优化是<strong>基于假设</strong>的：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&quot;这个方法只会被 AlipayPay 实现调用&quot; → 编译成直接调用</span><br></pre></td></tr></table></figure>
+
+<p>一旦假设被打破（比如热更新加载了新的实现类），JVM 会把这段代码<strong>退回解释执行</strong>，重新收集信息再编译。这个过程叫逆优化。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 看逆优化次数</span></span><br><span class="line">jstat -compiler &lt;pid&gt;          <span class="comment"># 编译统计</span></span><br><span class="line">-XX:+PrintCompilation          <span class="comment"># 打印编译过程（生产慎用，输出巨大）</span></span><br></pre></td></tr></table></figure>
+
+<p>线上如果出现”偶发的性能抖动 + 逆优化次数暴涨”，通常是<strong>类加载导致的类型假设失效</strong>——比如动态代理、热部署、Groovy 脚本频繁生成新类。</p>
+<hr>
+<h2 id="七、CodeCache"><a href="#七、CodeCache" class="headerlink" title="七、CodeCache"></a>七、CodeCache</h2><p>JIT 编译的机器码存在 CodeCache 里（在堆外）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">-XX:ReservedCodeCacheSize=256m   <span class="comment"># 上限</span></span><br><span class="line">-XX:InitialCodeCacheSize=64m</span><br></pre></td></tr></table></figure>
+
+<p>CodeCache 满了会怎样？</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">编译线程停止工作 → 代码退回解释执行 → 性能断崖式下跌</span><br><span class="line">日志：CodeCache is full. Compiler has been disabled.</span><br></pre></td></tr></table></figure>
+
+<p>这是很多”跑了几天突然变慢”的服务的原因之一。Java 8 之后有分层 CodeCache，一般不会那么容易满，但大量动态生成类（Lambda、CGLIB、脚本引擎）的服务要留意。</p>
+<hr>
+<h2 id="八、面试重点清单"><a href="#八、面试重点清单" class="headerlink" title="八、面试重点清单"></a>八、面试重点清单</h2><ul>
+<li>Java 为什么用”解释 + 编译”混合模式？</li>
+<li>什么是热点代码？JVM 怎么发现热点？</li>
+<li>方法计数器和回边计数器的区别？OSR 是什么？</li>
+<li>C1 和 C2 的区别？分层编译有哪几层？</li>
+<li>什么是逃逸分析？能带来哪些优化？</li>
+<li>栈上分配、标量替换、锁消除分别是什么？</li>
+<li>HotSpot 真的实现了栈上分配吗？</li>
+<li>方法内联有什么好处和代价？</li>
+<li>什么是逆优化？什么时候会发生？</li>
+<li>CodeCache 满了会有什么现象？</li>
+<li>为什么 Java 服务需要”预热”？怎么预热？</li>
+</ul>
+<hr>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>JIT 这块看起来偏底层，但它解释了很多”反直觉”的现象：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">为什么 Java 启动慢？       → 先解释执行，热点才编译</span><br><span class="line">为什么压测第一分钟偏低？   → 预热期，C2 还没接管</span><br><span class="line">为什么小方法不用手写内联？ → JIT 会做</span><br><span class="line">为什么 StringBuffer 不一定慢？ → 锁消除</span><br><span class="line">为什么跑几天突然变慢？     → CodeCache 满了 / 逆优化</span><br></pre></td></tr></table></figure>
+
+<p>到这里 JVM 系列六篇就齐了：内存结构 → GC 基础 → 收集器 → 类加载 → 调优排查 → JIT。</p>
+<p>从”知道有哪些区”到”线上出问题能定位”，这条线走完，JVM 这块的面试题基本都有话可说了。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/05/27/jvm06-jit/">https://chukui2005.github.io/2026/05/27/jvm06-jit/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/JVM/">JVM</a><a class="post-meta__tags" href="/blog/tags/%E9%9D%A2%E8%AF%95/">面试</a><a class="post-meta__tags" href="/blog/tags/JIT/">JIT</a><a class="post-meta__tags" href="/blog/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a><a class="post-meta__tags" href="/blog/tags/%E9%80%83%E9%80%B8%E5%88%86%E6%9E%90/">逃逸分析</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/09/27/dbx-database-client/" title="我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx</div></div><div class="info-2"><div class="info-item-1">我为什么卸载了 Navicat 和 Tiny RDM👉 GitHub 地址 先说结论以前电脑上长期装着两个数据库客户端：Navicat 管 MySQL，Tiny RDM 看 Redis。 不是说它们不好。Navicat 功能确实全，Tiny RDM 也算轻量。但两套界面、两套快捷键、两个更新弹窗，天天来回切，时间久了是真的烦。 后来试了 dbx，用了大概一周，我把上面两个都卸了。    第一眼：简约，但不简陋dbx 的 UI 是那种很克制的风格。没有花哨的渐变，没有堆到屏幕边缘的按钮，信息密度刚刚好：左边连接树和 schema 浏览，中间 SQL 编辑器，右边结果集。第一次打开基本不用看文档就知道该点哪儿。 细节上也能看出是天天自己在用的人做的：  暗色模式会和系统标题栏同步，不是那种”应用是黑的、标题栏是白的”的割裂感 编辑器有 9 套主题，SQL 高亮、格式化、自动补全都齐全，Cmd/Ctrl + Enter 直接执行当前语句或者选中的 SQL 查询历史会持久化，标签页关掉重开还在，写了一半的 SQL 不会丢 中英西三语界面  对每天要开十几次数据库客户端的人来说，界面顺眼...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</div></div><div class="info-2"><div class="info-item-1">我写了一个开源组件：OpenAI Code Review👉 GitHub 开源地址 这是什么东西？一个基于 DeepSeek API 的自动化代码评审组件，跑在 GitHub Actions 上。 流程很简单：你往仓库推代码 → Action 自动触发 → SDK 拉出本次的 git diff → 发给 DeepSeek 评审 → 结果存到一个专门的日志仓库里 → 可选通过微信模板消息通知你。   为什么要写它？之前面了不少公司，发现很多团队对代码评审这件事执行得很敷衍 — 要么没时间做，要么做成了走过场。但代码评审其实是提升质量的硬道理。 我的想法是：把评审这件事自动化。每次 push 自动跑一次，不费人力，而且 AI 不会漏看细节。 架构设计整体是个 Maven 多模块工程，分两部分： 123456openai-code-review/├── openai-code-review-sdk/    ← 核心 SDK│   └── 源码：domain / infrastructure / types├── openai-code-review-test/   ← 测试模块├──...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/05/12/jvm01-memory/" title="01 — JVM内存区域与对象创建"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-12</div><div class="info-item-2">01 — JVM内存区域与对象创建</div></div><div class="info-2"><div class="info-item-1">JVM内存区域与对象创建核心知识点速览   知识点 要点    运行时数据区 程序计数器 &#x2F; 虚拟机栈 &#x2F; 本地方法栈 &#x2F; 堆 &#x2F; 方法区 &#x2F; 直接内存   线程私有 PC、虚拟机栈、本地方法栈   线程共享 堆、方法区（JDK8 后是元空间）   栈帧结构 局部变量表、操作数栈、动态链接、方法返回地址   对象创建 类加载检查 → 分配内存 → 零值初始化 → 设置对象头 → 执行 &lt;init&gt;   内存布局 对象头（Mark Word + 类型指针）+ 实例数据 + 对齐填充   指针压缩 默认开启，堆小于 32GB 时引用用 4 字节表示   访问定位 HotSpot 用直接指针，不用句柄    一、运行时数据区先记住一张图： 1234567891011121314┌──────────────────────────────────────────────┐│                 线程私有                       ││  ┌──────────┐ ┌────────────┐ ┌...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/15/jvm02-gc-basics/" title="02 — 垃圾回收基础：怎么判断对象死了"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-15</div><div class="info-item-2">02 — 垃圾回收基础：怎么判断对象死了</div></div><div class="info-2"><div class="info-item-1">垃圾回收基础：怎么判断对象死了核心知识点速览   知识点 要点    判断死亡 引用计数（有循环引用问题）vs 可达性分析（JVM 采用）   GC Roots 栈中引用、静态变量、常量、JNI 引用、活跃线程等   引用类型 强 &#x2F; 软 &#x2F; 弱 &#x2F; 虚，对应不同回收时机   回收算法 标记-清除、复制、标记-整理、分代收集   跨代引用 卡表 + 记忆集，避免 Minor GC 扫全堆   三色标记 白灰黑，漏标的两个条件，增量更新 vs SATB   STW 安全点、安全区域、主动式中断    一、怎么判断一个对象该被回收1.1 引用计数：简单但有致命缺陷12345678910每个对象维护一个计数器：    被引用 +1，引用失效 -1，归零即可回收优点：实现简单，回收及时缺点：无法解决循环引用    A.instance = B;    B.instance = A;    A = null; B = null;    → 两个对象互相引用，计数永远不为 0，永远回收不掉  所以 JVM 没有采用引用计数。Python、Swift 用这套，但都...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/21/jvm04-classloading/" title="04 — 类加载机制与双亲委派"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-21</div><div class="info-item-2">04 — 类加载机制与双亲委派</div></div><div class="info-2"><div class="info-item-1">类加载机制与双亲委派核心知识点速览   知识点 要点    生命周期 加载、验证、准备、解析、初始化、使用、卸载   准备阶段 静态变量赋零值，static final 常量赋真值   初始化时机 主动引用才触发，被动引用不触发   类加载器 Bootstrap &#x2F; Platform &#x2F; App &#x2F; 自定义   双亲委派 先委派父加载器，父加载不了才自己加载   打破双亲委派 SPI（上下文类加载器）、Tomcat（WebApp 隔离）、OSGi   热部署 自定义类加载器 + 卸载旧 ClassLoader    一、类的生命周期12加载 → 验证 → 准备 → 解析 → 初始化 → 使用 → 卸载 └──────── 连接（Linking）────────┘  七个阶段，顺序基本固定（解析可以发生在初始化之后，为了支持动态绑定）。 1.1 加载三件事：  通过全限定名获取类的二进制字节流（不一定是 class 文件，可以是网络、动态生成、JAR 包） 把字节流中的静态存储结构转成方法区的运行时数据结构 在堆里生成一个 java.lang.Clas...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/18/jvm03-collectors/" title="03 — 垃圾收集器：从Serial到G1、ZGC"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-18</div><div class="info-item-2">03 — 垃圾收集器：从Serial到G1、ZGC</div></div><div class="info-2"><div class="info-item-1">垃圾收集器：从Serial到G1、ZGC核心知识点速览   知识点 要点    收集器演进 Serial → ParNew&#x2F;Parallel → CMS → G1 → ZGC&#x2F;Shenandoah   分代收集器 Serial、ParNew、Parallel Scavenge、Serial Old、Parallel Old   CMS 标记-清除，四阶段，并发标记，碎片 + 浮动垃圾   G1 Region 化堆，可预测停顿，Mixed GC，SATB   ZGC 染色指针 + 读屏障，停顿 &lt;1ms，JDK21 分代   选型 小堆 Parallel，大堆 G1，超大堆&#x2F;低延迟 ZGC    一、先看全景图12345678年轻代                老年代─────────────────────────────────────────Serial          →   Serial Old        （单线程，客户端）ParNew          →   CMS               （多线程 + 低延迟）Para...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/24/jvm05-tuning/" title="05 — JVM调优与线上问题排查"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-24</div><div class="info-item-2">05 — JVM调优与线上问题排查</div></div><div class="info-2"><div class="info-item-1">JVM调优与线上问题排查核心知识点速览   知识点 要点    核心参数 -Xms/-Xmx/-Xss/-Xmn/-XX:MetaspaceSize   常用工具 jps、jstat、jmap、jstack、jcmd、arthas、MAT   OOM 类型 heap space、GC overhead、Metaspace、Direct buffer、native thread   CPU 飙高 top -Hp → 线程号转 16 进制 → jstack 定位   内存泄漏 jmap dump → MAT 支配树找大对象   死锁 jstack 自动检测 + 线程状态分析    一、先把参数搞清楚1234567891011121314151617181920212223# 堆-Xms4g                      # 初始堆，生产建议和 -Xmx 一致-Xmx4g                      # 最大堆-Xmn1g                      # 新生代大小（G1 不建议手工设）-XX:SurvivorRatio=8         # ...</div></div></div></a><a class="pagination-related" href="/blog/2026/03/28/kafka03-advanced/" title="06 — Kafka高级特性与RabbitMQ对比"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-03-28</div><div class="info-item-2">06 — Kafka高级特性与RabbitMQ对比</div></div><div class="info-2"><div class="info-item-1">Kafka高级特性与RabbitMQ对比核心知识点速览   知识点 要点    Producer流程 序列化 → 分区器 → 累加器 → 发送   Consumer Rebalance 分区重分配，STW式，需要关注影响   消息清理策略 delete（过期删除）&#x2F; compact（保留最新）   性能优化 批处理、压缩、缓冲区调优   MQ对比选型 Kafka vs RabbitMQ vs RocketMQ    一、Kafka Producer核心流程12345678910111213Producer    │    ├── 1. 拦截器链（可选）    ├── 2. 序列化器（StringSerializer, JsonSerializer...）    ├── 3. 分区器（Partitioner）    │      ├── 指定分区 → 直接使用    │      ├── 指定Key → hash(key) % numPartitions    │      └── 无Key → 轮询(sticky partition)    ├── 4. Record ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">67</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">246</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">14</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#JIT%E7%BC%96%E8%AF%91%E4%B8%8E%E6%89%A7%E8%A1%8C%E5%BC%95%E6%93%8E%EF%BC%9A%E4%BB%A3%E7%A0%81%E5%88%B0%E5%BA%95%E6%80%8E%E4%B9%88%E8%B7%91%E8%B5%B7%E6%9D%A5%E7%9A%84"><span class="toc-number">1.</span> <span class="toc-text">JIT编译与执行引擎：代码到底怎么跑起来的</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81Java-%E4%B8%BA%E4%BB%80%E4%B9%88%E2%80%9D%E7%BC%96%E8%AF%91-%E8%A7%A3%E9%87%8A%E2%80%9D%E4%B8%A4%E6%9D%A1%E8%85%BF%E8%B5%B0%E8%B7%AF"><span class="toc-number">1.2.</span> <span class="toc-text">一、Java 为什么”编译 + 解释”两条腿走路</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E7%83%AD%E7%82%B9%E6%8E%A2%E6%B5%8B%EF%BC%9A%E5%93%AA%E4%BA%9B%E4%BB%A3%E7%A0%81%E5%80%BC%E5%BE%97%E7%BC%96%E8%AF%91"><span class="toc-number">1.3.</span> <span class="toc-text">二、热点探测：哪些代码值得编译</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E5%9F%BA%E4%BA%8E%E9%87%87%E6%A0%B7%E7%9A%84%E7%83%AD%E7%82%B9%E6%8E%A2%E6%B5%8B"><span class="toc-number">1.3.1.</span> <span class="toc-text">2.1 基于采样的热点探测</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E5%9F%BA%E4%BA%8E%E8%AE%A1%E6%95%B0%E5%99%A8%E7%9A%84%E7%83%AD%E7%82%B9%E6%8E%A2%E6%B5%8B%EF%BC%88HotSpot-%E9%87%87%E7%94%A8%EF%BC%89"><span class="toc-number">1.3.2.</span> <span class="toc-text">2.2 基于计数器的热点探测（HotSpot 采用）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81C1-%E5%92%8C-C2"><span class="toc-number">1.4.</span> <span class="toc-text">三、C1 和 C2</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E5%88%86%E5%B1%82%E7%BC%96%E8%AF%91%EF%BC%88JDK7-%E5%90%8E%E9%BB%98%E8%AE%A4%EF%BC%89"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 分层编译（JDK7 后默认）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E9%80%83%E9%80%B8%E5%88%86%E6%9E%90%EF%BC%9A%E6%9C%80%E5%AE%B9%E6%98%93%E8%A2%AB%E9%97%AE%E7%9A%84-JIT-%E4%BC%98%E5%8C%96"><span class="toc-number">1.5.</span> <span class="toc-text">四、逃逸分析：最容易被问的 JIT 优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E4%BB%80%E4%B9%88%E6%98%AF%E9%80%83%E9%80%B8"><span class="toc-number">1.5.1.</span> <span class="toc-text">4.1 什么是逃逸</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E9%80%83%E9%80%B8%E5%88%86%E6%9E%90%E5%90%8E%E8%83%BD%E5%81%9A%E4%B8%89%E4%BB%B6%E4%BA%8B"><span class="toc-number">1.5.2.</span> <span class="toc-text">4.2 逃逸分析后能做三件事</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E5%85%B6%E4%BB%96%E5%B8%B8%E8%A7%81%E4%BC%98%E5%8C%96"><span class="toc-number">1.6.</span> <span class="toc-text">五、其他常见优化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E6%96%B9%E6%B3%95%E5%86%85%E8%81%94"><span class="toc-number">1.6.1.</span> <span class="toc-text">5.1 方法内联</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E5%8E%BB%E8%99%9A%E6%8B%9F%E5%8C%96"><span class="toc-number">1.6.2.</span> <span class="toc-text">5.2 去虚拟化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E5%85%AC%E5%85%B1%E5%AD%90%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B6%88%E9%99%A4%E3%80%81%E5%BE%AA%E7%8E%AF%E5%B1%95%E5%BC%80%E3%80%81%E8%BE%B9%E7%95%8C%E6%A3%80%E6%9F%A5%E6%B6%88%E9%99%A4"><span class="toc-number">1.6.3.</span> <span class="toc-text">5.3 公共子表达式消除、循环展开、边界检查消除</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E9%80%86%E4%BC%98%E5%8C%96%EF%BC%88Deoptimization%EF%BC%89"><span class="toc-number">1.7.</span> <span class="toc-text">六、逆优化（Deoptimization）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81CodeCache"><span class="toc-number">1.8.</span> <span class="toc-text">七、CodeCache</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB%E3%80%81%E9%9D%A2%E8%AF%95%E9%87%8D%E7%82%B9%E6%B8%85%E5%8D%95"><span class="toc-number">1.9.</span> <span class="toc-text">八、面试重点清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B0%8F%E7%BB%93"><span class="toc-number">1.10.</span> <span class="toc-text">小结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/11/20/gitglass/" title="我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交">我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交</a><time datetime="2026-11-20T03:01:39.000Z" title="发表于 2026-11-20 11:01:39">2026-11-20</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/10/17/deepseek-harness/" title="01 — DeepSeek Harness：Agent = 模型 + 工程底座">01 — DeepSeek Harness：Agent = 模型 + 工程底座</a><time datetime="2026-10-17T03:33:25.000Z" title="发表于 2026-10-17 11:33:25">2026-10-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/09/27/dbx-database-client/" title="我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx">我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx</a><time datetime="2026-09-27T03:20:28.000Z" title="发表于 2026-09-27 11:20:28">2026-09-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/27/jvm06-jit/" title="06 — JIT编译与执行引擎：代码到底怎么跑起来的">06 — JIT编译与执行引擎：代码到底怎么跑起来的</a><time datetime="2026-05-27T13:22:39.000Z" title="发表于 2026-05-27 21:22:39">2026-05-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:49:58.000Z" title="发表于 2026-05-26 21:49:58">2026-05-26</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>

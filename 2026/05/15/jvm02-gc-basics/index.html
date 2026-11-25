@@ -1,0 +1,992 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>02 — 垃圾回收基础：怎么判断对象死了 | 初魁的技术博客</title><meta name="author" content="初魁"><meta name="copyright" content="初魁"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="垃圾回收基础：怎么判断对象死了核心知识点速览   知识点 要点    判断死亡 引用计数（有循环引用问题）vs 可达性分析（JVM 采用）   GC Roots 栈中引用、静态变量、常量、JNI 引用、活跃线程等   引用类型 强 &#x2F; 软 &#x2F; 弱 &#x2F; 虚，对应不同回收时机   回收算法 标记-清除、复制、标记-整理、分代收集   跨代引用 卡表 + 记忆集，避免 Mi">
+<meta property="og:type" content="article">
+<meta property="og:title" content="02 — 垃圾回收基础：怎么判断对象死了">
+<meta property="og:url" content="https://chukui2005.github.io/2026/05/15/jvm02-gc-basics/index.html">
+<meta property="og:site_name" content="初魁的技术博客">
+<meta property="og:description" content="垃圾回收基础：怎么判断对象死了核心知识点速览   知识点 要点    判断死亡 引用计数（有循环引用问题）vs 可达性分析（JVM 采用）   GC Roots 栈中引用、静态变量、常量、JNI 引用、活跃线程等   引用类型 强 &#x2F; 软 &#x2F; 弱 &#x2F; 虚，对应不同回收时机   回收算法 标记-清除、复制、标记-整理、分代收集   跨代引用 卡表 + 记忆集，避免 Mi">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://chukui2005.github.io/img/avatar.jpg">
+<meta property="article:published_time" content="2026-05-15T13:40:11.000Z">
+<meta property="article:modified_time" content="2026-11-25T07:22:41.364Z">
+<meta property="article:author" content="初魁">
+<meta property="article:tag" content="JVM">
+<meta property="article:tag" content="面试">
+<meta property="article:tag" content="GC">
+<meta property="article:tag" content="可达性分析">
+<meta property="article:tag" content="三色标记">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://chukui2005.github.io/img/avatar.jpg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "02 — 垃圾回收基础：怎么判断对象死了",
+  "url": "https://chukui2005.github.io/2026/05/15/jvm02-gc-basics/",
+  "image": "https://chukui2005.github.io/img/avatar.jpg",
+  "datePublished": "2026-05-15T13:40:11.000Z",
+  "dateModified": "2026-11-25T07:22:41.364Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "初魁",
+      "url": "https://github.com/chukui2005"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/blog/img/favicon.png"><link rel="canonical" href="https://chukui2005.github.io/2026/05/15/jvm02-gc-basics/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="manifest" href="/blog/null"/><link rel="stylesheet" href="/blog/css/index.css?v=5.5.5-b1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script async="async" src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script><script>(adsbygoogle = window.adsbygoogle || []).push({
+  google_ad_client: '',
+  enable_page_level_ads: 'true'
+});</script><script>const GLOBAL_CONFIG = {
+  root: '/blog/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: {"defaultEncoding":2,"translateDelay":0,"msgToTraditionalChinese":"繁","msgToSimplifiedChinese":"簡"},
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":150,"languages":{"author":"作者: 初魁","link":"链接: ","source":"来源: 初魁的技术博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'null',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#1f1f1f","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.13.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '02 — 垃圾回收基础：怎么判断对象死了',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="/blog/css/no-avatar-rotate.css"><meta name="generator" content="Hexo 7.3.0"><link rel="alternate" href="/blog/atom.xml" title="初魁的技术博客" type="application/atom+xml">
+</head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div class="post" id="body-wrap"><header class="post-bg" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/blog/"><span class="site-name">初魁的技术博客</span></a><a class="nav-page-title" href="/blog/"><span class="site-name">02 — 垃圾回收基础：怎么判断对象死了</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"></div></nav><div id="post-info"><h1 class="post-title">02 — 垃圾回收基础：怎么判断对象死了<a class="post-edit-link" href="null_posts/jvm02-gc-basics.md" title="编辑" target="_blank"><i class="fas fa-pencil-alt"></i></a></h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-05-15T13:40:11.000Z" title="发表于 2026-05-15 21:40:11">2026-05-15</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-11-25T07:22:41.364Z" title="更新于 2026-11-25 15:22:41">2026-11-25</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blog/categories/JVM/">JVM</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">2.4k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>7分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span>402</span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><div id="post-outdate-notice" data="{&quot;limitDay&quot;:365,&quot;messagePrev&quot;:&quot;It has been&quot;,&quot;messageNext&quot;:&quot;days since the last update, the content of the article may be outdated.&quot;,&quot;postUpdate&quot;:&quot;2026-11-25 15:22:41&quot;}" hidden></div><h1 id="垃圾回收基础：怎么判断对象死了"><a href="#垃圾回收基础：怎么判断对象死了" class="headerlink" title="垃圾回收基础：怎么判断对象死了"></a>垃圾回收基础：怎么判断对象死了</h1><h2 id="核心知识点速览"><a href="#核心知识点速览" class="headerlink" title="核心知识点速览"></a>核心知识点速览</h2><table>
+<thead>
+<tr>
+<th>知识点</th>
+<th>要点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>判断死亡</td>
+<td>引用计数（有循环引用问题）vs 可达性分析（JVM 采用）</td>
+</tr>
+<tr>
+<td>GC Roots</td>
+<td>栈中引用、静态变量、常量、JNI 引用、活跃线程等</td>
+</tr>
+<tr>
+<td>引用类型</td>
+<td>强 &#x2F; 软 &#x2F; 弱 &#x2F; 虚，对应不同回收时机</td>
+</tr>
+<tr>
+<td>回收算法</td>
+<td>标记-清除、复制、标记-整理、分代收集</td>
+</tr>
+<tr>
+<td>跨代引用</td>
+<td>卡表 + 记忆集，避免 Minor GC 扫全堆</td>
+</tr>
+<tr>
+<td>三色标记</td>
+<td>白灰黑，漏标的两个条件，增量更新 vs SATB</td>
+</tr>
+<tr>
+<td>STW</td>
+<td>安全点、安全区域、主动式中断</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="一、怎么判断一个对象该被回收"><a href="#一、怎么判断一个对象该被回收" class="headerlink" title="一、怎么判断一个对象该被回收"></a>一、怎么判断一个对象该被回收</h2><h3 id="1-1-引用计数：简单但有致命缺陷"><a href="#1-1-引用计数：简单但有致命缺陷" class="headerlink" title="1.1 引用计数：简单但有致命缺陷"></a>1.1 引用计数：简单但有致命缺陷</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">每个对象维护一个计数器：</span><br><span class="line">    被引用 +1，引用失效 -1，归零即可回收</span><br><span class="line"></span><br><span class="line">优点：实现简单，回收及时</span><br><span class="line">缺点：无法解决循环引用</span><br><span class="line"></span><br><span class="line">    A.instance = B;</span><br><span class="line">    B.instance = A;</span><br><span class="line">    A = null; B = null;</span><br><span class="line">    → 两个对象互相引用，计数永远不为 0，永远回收不掉</span><br></pre></td></tr></table></figure>
+
+<p>所以 JVM <strong>没有采用</strong>引用计数。Python、Swift 用这套，但都要额外机制处理循环引用。</p>
+<h3 id="1-2-可达性分析：JVM-的做法"><a href="#1-2-可达性分析：JVM-的做法" class="headerlink" title="1.2 可达性分析：JVM 的做法"></a>1.2 可达性分析：JVM 的做法</h3><p>从一组叫 <strong>GC Roots</strong> 的对象出发，沿着引用链往下遍历，能走到的对象是”活的”，走不到的就是垃圾。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">GC Roots</span><br><span class="line">   ├── A → B → C        （存活）</span><br><span class="line">   └── D                （存活）</span><br><span class="line">E → F                    （E 不是 GC Roots，可达性走不到 → 垃圾，即使 E 和 F 互相引用）</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-3-GC-Roots-有哪些"><a href="#1-3-GC-Roots-有哪些" class="headerlink" title="1.3 GC Roots 有哪些"></a>1.3 GC Roots 有哪些</h3><p>这个必须背下来：</p>
+<ul>
+<li><strong>虚拟机栈中局部变量表引用的对象</strong>（正在执行的方法的入参、局部变量）</li>
+<li><strong>方法区中类静态属性引用的对象</strong></li>
+<li><strong>方法区中常量引用的对象</strong>（字符串常量池里的引用）</li>
+<li><strong>本地方法栈中 JNI 引用的对象</strong></li>
+<li><strong>活跃线程</strong>（<code>Thread</code> 对象本身就是一个 Root）</li>
+<li><strong>synchronized 持有的对象</strong></li>
+<li>JVM 内部引用（基本类型对应的 Class 对象、常驻异常对象、系统类加载器）</li>
+</ul>
+<p>一句话理解：<strong>凡是”正在被使用的”和”全局可达的”，都是 Root。</strong></p>
+<hr>
+<h2 id="二、四种引用类型"><a href="#二、四种引用类型" class="headerlink" title="二、四种引用类型"></a>二、四种引用类型</h2><table>
+<thead>
+<tr>
+<th>类型</th>
+<th>回收时机</th>
+<th>典型用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>强引用</td>
+<td>永不回收（除非不可达）</td>
+<td><code>Object o = new Object()</code></td>
+</tr>
+<tr>
+<td>软引用 SoftReference</td>
+<td>内存不足时回收</td>
+<td>缓存（图片、查询结果）</td>
+</tr>
+<tr>
+<td>弱引用 WeakReference</td>
+<td>下次 GC 就回收</td>
+<td>ThreadLocalMap 的 key、WeakHashMap</td>
+</tr>
+<tr>
+<td>虚引用 PhantomReference</td>
+<td>随时可能被回收，只能感知回收</td>
+<td>管理堆外内存（DirectByteBuffer 的 Cleaner）</td>
+</tr>
+</tbody></table>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 软引用做缓存：内存紧张时自动释放，不会 OOM</span></span><br><span class="line">Map&lt;String, SoftReference&lt;<span class="type">byte</span>[]&gt;&gt; cache = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line"><span class="comment">// 弱引用：GC 一来就没了</span></span><br><span class="line">WeakReference&lt;Object&gt; ref = <span class="keyword">new</span> <span class="title class_">WeakReference</span>&lt;&gt;(<span class="keyword">new</span> <span class="title class_">Object</span>());</span><br><span class="line"></span><br><span class="line"><span class="comment">// 虚引用必须配合引用队列使用</span></span><br><span class="line">ReferenceQueue&lt;Object&gt; queue = <span class="keyword">new</span> <span class="title class_">ReferenceQueue</span>&lt;&gt;();</span><br><span class="line">PhantomReference&lt;Object&gt; phantom = <span class="keyword">new</span> <span class="title class_">PhantomReference</span>&lt;&gt;(obj, queue);</span><br></pre></td></tr></table></figure>
+
+<p>两个常考点：</p>
+<ul>
+<li><strong>ThreadLocal 内存泄漏</strong>：ThreadLocalMap 的 key 是弱引用，value 是强引用。key 被回收后 value 还在，线程池里线程不销毁就永远清不掉——所以必须 <code>remove()</code></li>
+<li><strong>DirectByteBuffer 的回收</strong>：靠虚引用 + Cleaner，在对象被回收时触发 <code>free()</code> 释放堆外内存</li>
+</ul>
+<p><code>finalize()</code> 就别用了，执行时机不确定、可能让对象”复活”、拖慢 GC，JDK9 起标记废弃。</p>
+<hr>
+<h2 id="三、三种基础回收算法"><a href="#三、三种基础回收算法" class="headerlink" title="三、三种基础回收算法"></a>三、三种基础回收算法</h2><h3 id="3-1-标记-清除（Mark-Sweep）"><a href="#3-1-标记-清除（Mark-Sweep）" class="headerlink" title="3.1 标记-清除（Mark-Sweep）"></a>3.1 标记-清除（Mark-Sweep）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">标记所有存活对象 → 统一清除未标记的</span><br><span class="line"></span><br><span class="line">优点：实现简单</span><br><span class="line">缺点：</span><br><span class="line">    ① 效率不稳定（对象越多越慢）</span><br><span class="line">    ② 产生内存碎片，大对象分配时可能找不到连续空间</span><br></pre></td></tr></table></figure>
+
+<p>CMS 用的就是这个，所以 CMS 有碎片问题。</p>
+<h3 id="3-2-复制（Copying）"><a href="#3-2-复制（Copying）" class="headerlink" title="3.2 复制（Copying）"></a>3.2 复制（Copying）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">把内存分两块，每次只用一块</span><br><span class="line">回收时把存活对象复制到另一块，然后整块清空</span><br><span class="line"></span><br><span class="line">优点：没有碎片，分配用指针碰撞，快</span><br><span class="line">缺点：浪费一半空间</span><br></pre></td></tr></table></figure>
+
+<p>新生代用的就是它——但做了优化，不是 1:1 而是 8:1:1（Eden : S0 : S1），只浪费 10%。</p>
+<h3 id="3-3-标记-整理（Mark-Compact）"><a href="#3-3-标记-整理（Mark-Compact）" class="headerlink" title="3.3 标记-整理（Mark-Compact）"></a>3.3 标记-整理（Mark-Compact）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">标记存活对象 → 全部向一端移动 → 清理边界外的内存</span><br><span class="line"></span><br><span class="line">优点：没有碎片</span><br><span class="line">缺点：移动对象要更新所有引用，成本高，停顿长</span><br></pre></td></tr></table></figure>
+
+<p>老年代常用（Serial Old、Parallel Old）。</p>
+<h3 id="3-4-为什么要分代"><a href="#3-4-为什么要分代" class="headerlink" title="3.4 为什么要分代"></a>3.4 为什么要分代</h3><p>三条经验规律（分代假说）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">① 弱分代假说：绝大多数对象朝生夕灭</span><br><span class="line">② 强分代假说：熬过越多次 GC 的对象，越难死</span><br><span class="line">③ 跨代引用假说：跨代引用相对于同代引用极少</span><br></pre></td></tr></table></figure>
+
+<p>所以堆分成新生代和老年代，各自用最适合的算法：新生代对象死得快 → 复制算法，只复制少量存活对象；老年代存活率高 → 标记-整理，不浪费空间。</p>
+<hr>
+<h2 id="四、跨代引用与卡表"><a href="#四、跨代引用与卡表" class="headerlink" title="四、跨代引用与卡表"></a>四、跨代引用与卡表</h2><p>问题来了：Minor GC 只扫新生代，但如果老年代有个对象引用了新生代对象，这个新生代对象就不该被回收——怎么知道老年代有没有引用它？</p>
+<p>总不能每次 Minor GC 都扫一遍老年代吧。</p>
+<p>解决方案：<strong>卡表（Card Table）+ 记忆集（Remembered Set）</strong>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">把老年代（或整个堆）按 512 字节划分成一个个卡页（Card Page）</span><br><span class="line"></span><br><span class="line">老年代对象引用新生代对象时：</span><br><span class="line">    写屏障（Write Barrier）把这个卡页标记为 dirty</span><br><span class="line"></span><br><span class="line">Minor GC 时：</span><br><span class="line">    只扫 dirty 的卡页，把这些对象加入 GC Roots 一起做可达性分析</span><br></pre></td></tr></table></figure>
+
+<p>写屏障是 JVM 在引用赋值时插入的一小段代码，AOP 的思路：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 原本的赋值</span></span><br><span class="line">a.field = b;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 实际执行（伪代码）</span></span><br><span class="line">a.field = b;</span><br><span class="line"><span class="keyword">if</span> (跨代引用) cardTable.markDirty(a 所在卡页);</span><br></pre></td></tr></table></figure>
+
+<p>G1 里更进一步，每个 Region 都有自己的 RSet（Remembered Set），记录”谁引用了我”，这样回收单个 Region 时不用扫全堆。</p>
+<hr>
+<h2 id="五、三色标记：并发标记的核心"><a href="#五、三色标记：并发标记的核心" class="headerlink" title="五、三色标记：并发标记的核心"></a>五、三色标记：并发标记的核心</h2><p>并发标记时，用户线程还在跑，引用关系一直在变。三色标记就是用颜色描述标记进度：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">白色：还没被访问到（如果标记结束还是白色 → 垃圾）</span><br><span class="line">灰色：自己被访问到了，但成员引用还没扫完</span><br><span class="line">黑色：自己和所有引用都扫完了</span><br></pre></td></tr></table></figure>
+
+<p>正常流程：白 → 灰 → 黑，灰色是待处理队列。</p>
+<h3 id="5-1-并发标记会漏标"><a href="#5-1-并发标记会漏标" class="headerlink" title="5.1 并发标记会漏标"></a>5.1 并发标记会漏标</h3><p>用户线程在标记过程中修改引用，可能导致<strong>存活对象被标成白色</strong>，然后被误删。漏标必须同时满足两个条件：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">① 赋值器插入了一条或多条从黑色对象到白色对象的新引用</span><br><span class="line">② 赋值器删除了全部从灰色对象到该白色对象的直接或间接引用</span><br></pre></td></tr></table></figure>
+
+<p>只要破坏其中一个，就不会漏标。两种方案：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">增量更新（Incremental Update）—— CMS 用</span><br><span class="line">    破坏条件①：黑色对象新增引用时，把它变回灰色，重新扫</span><br><span class="line">    记录&quot;新增的引用&quot;，重新标记阶段以这些为根再扫一遍</span><br><span class="line"></span><br><span class="line">原始快照（SATB, Snapshot At The Beginning）—— G1、ZGC 用</span><br><span class="line">    破坏条件②：灰色对象删除引用时，把被删的引用记下来</span><br><span class="line">    按&quot;开始标记那一刻的快照&quot;处理，新产生的垃圾留到下一轮</span><br></pre></td></tr></table></figure>
+
+<p>一句话记：<strong>CMS 记新增，G1 记删除。</strong></p>
+<h3 id="5-2-STW-与安全点"><a href="#5-2-STW-与安全点" class="headerlink" title="5.2 STW 与安全点"></a>5.2 STW 与安全点</h3><p>GC 必须在一个”引用关系不再变化”的时刻进行，所以要停掉用户线程，这就是 STW（Stop The World）。</p>
+<p>不能随时随地停——得停在<strong>安全点（Safepoint）</strong>：</p>
+<ul>
+<li>方法调用、循环跳转、异常跳转这些位置才会插安全点</li>
+<li>线程主动轮询一个标志位，发现要 GC 就自己挂起（主动式中断）</li>
+</ul>
+<p>为什么不在每条指令都插？因为安全点太多会严重影响性能。</p>
+<p>还有个概念叫<strong>安全区域（Safe Region）</strong>：线程处于 Sleep&#x2F;Blocked 状态走不到安全点时，标记自己进入安全区域，这段时间引用关系不变，GC 可以放心跑。</p>
+<hr>
+<h2 id="六、一次完整的-GC-是怎么发生的"><a href="#六、一次完整的-GC-是怎么发生的" class="headerlink" title="六、一次完整的 GC 是怎么发生的"></a>六、一次完整的 GC 是怎么发生的</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">Minor GC（只回收新生代）</span><br><span class="line">    Eden 满 → 触发</span><br><span class="line">    存活对象复制到 Survivor（年龄 +1）</span><br><span class="line">    年龄到阈值（默认 15）→ 晋升老年代</span><br><span class="line">    大对象直接进老年代（-XX:PretenureSizeThreshold）</span><br><span class="line">    动态年龄判断：Survivor 中同年龄对象总和超过一半 → 该年龄及以上的直接晋升</span><br><span class="line"></span><br><span class="line">Major / Full GC（回收老年代 + 新生代）</span><br><span class="line">    老年代空间不足、元空间不足、显式调用 System.gc()、晋升时老年代放不下</span><br><span class="line">    停顿时间长，生产环境要尽量避免</span><br></pre></td></tr></table></figure>
+
+<p>关于年龄阈值还有个坑：Mark Word 里分代年龄只有 <strong>4 个 bit</strong>，最大 15，所以 <code>-XX:MaxTenuringThreshold</code> 设再大也没用。</p>
+<hr>
+<h2 id="七、面试重点清单"><a href="#七、面试重点清单" class="headerlink" title="七、面试重点清单"></a>七、面试重点清单</h2><ul>
+<li>怎么判断对象可以被回收？为什么不用引用计数？</li>
+<li>GC Roots 有哪些？</li>
+<li>强、软、弱、虚引用的区别和使用场景？</li>
+<li>ThreadLocal 为什么会内存泄漏？怎么避免？</li>
+<li>三种回收算法各自的优缺点？为什么新生代用复制、老年代用标记-整理？</li>
+<li>什么是卡表和记忆集？写屏障干什么用？</li>
+<li>三色标记里，漏标的两个条件是什么？</li>
+<li>增量更新和原始快照的区别？分别谁在用？</li>
+<li>为什么要有安全点？安全区域解决什么问题？</li>
+<li>对象什么时候晋升老年代？动态年龄判断是什么？</li>
+<li>为什么分代年龄最大是 15？</li>
+</ul>
+<hr>
+<h2 id="小结"><a href="#小结" class="headerlink" title="小结"></a>小结</h2><p>这篇的核心就三件事：</p>
+<ol>
+<li><strong>可达性分析</strong> 决定谁是垃圾（GC Roots 要背）</li>
+<li><strong>分代 + 复制&#x2F;整理</strong> 决定怎么回收（背后的分代假说）</li>
+<li><strong>三色标记 + 读写屏障</strong> 决定并发标记怎么不出错</li>
+</ol>
+<p>下一篇讲具体的收集器：CMS 为什么被 G1 取代，ZGC 又凭什么把停顿压到 1ms 以内。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a target="_blank" rel="noopener" href="https://github.com/chukui2005">初魁</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://chukui2005.github.io/2026/05/15/jvm02-gc-basics/">https://chukui2005.github.io/2026/05/15/jvm02-gc-basics/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://chukui2005.github.io" target="_blank">初魁的技术博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blog/tags/JVM/">JVM</a><a class="post-meta__tags" href="/blog/tags/%E9%9D%A2%E8%AF%95/">面试</a><a class="post-meta__tags" href="/blog/tags/GC/">GC</a><a class="post-meta__tags" href="/blog/tags/%E5%8F%AF%E8%BE%BE%E6%80%A7%E5%88%86%E6%9E%90/">可达性分析</a><a class="post-meta__tags" href="/blog/tags/%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0/">三色标记</a></div><div class="post-share"><div class="social-share" data-image="/blog/img/avatar.jpg" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/blog/2026/05/18/jvm03-collectors/" title="03 — 垃圾收集器：从Serial到G1、ZGC"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">03 — 垃圾收集器：从Serial到G1、ZGC</div></div><div class="info-2"><div class="info-item-1">垃圾收集器：从Serial到G1、ZGC核心知识点速览   知识点 要点    收集器演进 Serial → ParNew&#x2F;Parallel → CMS → G1 → ZGC&#x2F;Shenandoah   分代收集器 Serial、ParNew、Parallel Scavenge、Serial Old、Parallel Old   CMS 标记-清除，四阶段，并发标记，碎片 + 浮动垃圾   G1 Region 化堆，可预测停顿，Mixed GC，SATB   ZGC 染色指针 + 读屏障，停顿 &lt;1ms，JDK21 分代   选型 小堆 Parallel，大堆 G1，超大堆&#x2F;低延迟 ZGC    一、先看全景图12345678年轻代                老年代─────────────────────────────────────────Serial          →   Serial Old        （单线程，客户端）ParNew          →   CMS               （多线程 + 低延迟）Para...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/12/jvm01-memory/" title="01 — JVM内存区域与对象创建"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">01 — JVM内存区域与对象创建</div></div><div class="info-2"><div class="info-item-1">JVM内存区域与对象创建核心知识点速览   知识点 要点    运行时数据区 程序计数器 &#x2F; 虚拟机栈 &#x2F; 本地方法栈 &#x2F; 堆 &#x2F; 方法区 &#x2F; 直接内存   线程私有 PC、虚拟机栈、本地方法栈   线程共享 堆、方法区（JDK8 后是元空间）   栈帧结构 局部变量表、操作数栈、动态链接、方法返回地址   对象创建 类加载检查 → 分配内存 → 零值初始化 → 设置对象头 → 执行 &lt;init&gt;   内存布局 对象头（Mark Word + 类型指针）+ 实例数据 + 对齐填充   指针压缩 默认开启，堆小于 32GB 时引用用 4 字节表示   访问定位 HotSpot 用直接指针，不用句柄    一、运行时数据区先记住一张图： 1234567891011121314┌──────────────────────────────────────────────┐│                 线程私有                       ││  ┌──────────┐ ┌────────────┐ ┌...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/blog/2026/05/18/jvm03-collectors/" title="03 — 垃圾收集器：从Serial到G1、ZGC"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-18</div><div class="info-item-2">03 — 垃圾收集器：从Serial到G1、ZGC</div></div><div class="info-2"><div class="info-item-1">垃圾收集器：从Serial到G1、ZGC核心知识点速览   知识点 要点    收集器演进 Serial → ParNew&#x2F;Parallel → CMS → G1 → ZGC&#x2F;Shenandoah   分代收集器 Serial、ParNew、Parallel Scavenge、Serial Old、Parallel Old   CMS 标记-清除，四阶段，并发标记，碎片 + 浮动垃圾   G1 Region 化堆，可预测停顿，Mixed GC，SATB   ZGC 染色指针 + 读屏障，停顿 &lt;1ms，JDK21 分代   选型 小堆 Parallel，大堆 G1，超大堆&#x2F;低延迟 ZGC    一、先看全景图12345678年轻代                老年代─────────────────────────────────────────Serial          →   Serial Old        （单线程，客户端）ParNew          →   CMS               （多线程 + 低延迟）Para...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/21/jvm04-classloading/" title="04 — 类加载机制与双亲委派"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-21</div><div class="info-item-2">04 — 类加载机制与双亲委派</div></div><div class="info-2"><div class="info-item-1">类加载机制与双亲委派核心知识点速览   知识点 要点    生命周期 加载、验证、准备、解析、初始化、使用、卸载   准备阶段 静态变量赋零值，static final 常量赋真值   初始化时机 主动引用才触发，被动引用不触发   类加载器 Bootstrap &#x2F; Platform &#x2F; App &#x2F; 自定义   双亲委派 先委派父加载器，父加载不了才自己加载   打破双亲委派 SPI（上下文类加载器）、Tomcat（WebApp 隔离）、OSGi   热部署 自定义类加载器 + 卸载旧 ClassLoader    一、类的生命周期12加载 → 验证 → 准备 → 解析 → 初始化 → 使用 → 卸载 └──────── 连接（Linking）────────┘  七个阶段，顺序基本固定（解析可以发生在初始化之后，为了支持动态绑定）。 1.1 加载三件事：  通过全限定名获取类的二进制字节流（不一定是 class 文件，可以是网络、动态生成、JAR 包） 把字节流中的静态存储结构转成方法区的运行时数据结构 在堆里生成一个 java.lang.Clas...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/12/jvm01-memory/" title="01 — JVM内存区域与对象创建"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-12</div><div class="info-item-2">01 — JVM内存区域与对象创建</div></div><div class="info-2"><div class="info-item-1">JVM内存区域与对象创建核心知识点速览   知识点 要点    运行时数据区 程序计数器 &#x2F; 虚拟机栈 &#x2F; 本地方法栈 &#x2F; 堆 &#x2F; 方法区 &#x2F; 直接内存   线程私有 PC、虚拟机栈、本地方法栈   线程共享 堆、方法区（JDK8 后是元空间）   栈帧结构 局部变量表、操作数栈、动态链接、方法返回地址   对象创建 类加载检查 → 分配内存 → 零值初始化 → 设置对象头 → 执行 &lt;init&gt;   内存布局 对象头（Mark Word + 类型指针）+ 实例数据 + 对齐填充   指针压缩 默认开启，堆小于 32GB 时引用用 4 字节表示   访问定位 HotSpot 用直接指针，不用句柄    一、运行时数据区先记住一张图： 1234567891011121314┌──────────────────────────────────────────────┐│                 线程私有                       ││  ┌──────────┐ ┌────────────┐ ┌...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/27/jvm06-jit/" title="06 — JIT编译与执行引擎：代码到底怎么跑起来的"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-27</div><div class="info-item-2">06 — JIT编译与执行引擎：代码到底怎么跑起来的</div></div><div class="info-2"><div class="info-item-1">JIT编译与执行引擎：代码到底怎么跑起来的核心知识点速览   知识点 要点    执行方式 解释执行 + 即时编译（JIT）混合   热点探测 方法计数器 &#x2F; 回边计数器   编译分层 C1（快、浅优化）、C2（慢、深优化）、分层编译   逃逸分析 对象不逃逸 → 栈上分配、标量替换、锁消除   常见优化 方法内联、公共子表达式消除、循环展开、去虚拟化   逆优化 假设被打破，退回解释执行    一、Java 为什么”编译 + 解释”两条腿走路12345678910Java 源码 (.java)    ↓ javac字节码 (.class)    ↓┌─────────────────────────────────────┐│ 执行引擎                              ││   解释器：逐条读字节码执行，启动快       ││   JIT编译器：把热点代码编译成本地机器码   ││   混合模式（默认）：两者配合            │└─────────────────────────────────────┘  为什么不直接全部编译成...</div></div></div></a><a class="pagination-related" href="/blog/2026/04/27/mybatis01-basics/" title="01 — MyBatis核心原理与面试重点"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-04-27</div><div class="info-item-2">01 — MyBatis核心原理与面试重点</div></div><div class="info-2"><div class="info-item-1">MyBatis核心原理与面试重点核心知识点速览   知识点 要点    MyBatis是什么 半自动ORM框架，SQL与Java解耦，SQL可控   核心组件 SqlSessionFactory &#x2F; SqlSession &#x2F; Mapper &#x2F; Executor   Mapper原理 JDK动态代理生成接口实现   #{} vs ${} 预编译占位符 vs 字符串拼接（SQL注入）   一级缓存 SqlSession级别，默认开启   二级缓存 namespace级别，需配置   延迟加载 用到才查，association&#x2F;collection    一、MyBatis 是什么1234567891011MyBatis = 半自动 ORM（对象关系映射）框架特点：    - SQL 写在 XML/注解里，与 Java 代码分离    - 开发者完全控制 SQL（相比 Hibernate 更灵活）    - 自动完成 结果集 → Java对象 的映射对比：    JDBC：手写连接/预编译/结果集解析，代码繁琐    Hibernate：全自动，...</div></div></div></a><a class="pagination-related" href="/blog/2026/05/24/jvm05-tuning/" title="05 — JVM调优与线上问题排查"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-05-24</div><div class="info-item-2">05 — JVM调优与线上问题排查</div></div><div class="info-2"><div class="info-item-1">JVM调优与线上问题排查核心知识点速览   知识点 要点    核心参数 -Xms/-Xmx/-Xss/-Xmn/-XX:MetaspaceSize   常用工具 jps、jstat、jmap、jstack、jcmd、arthas、MAT   OOM 类型 heap space、GC overhead、Metaspace、Direct buffer、native thread   CPU 飙高 top -Hp → 线程号转 16 进制 → jstack 定位   内存泄漏 jmap dump → MAT 支配树找大对象   死锁 jstack 自动检测 + 线程状态分析    一、先把参数搞清楚1234567891011121314151617181920212223# 堆-Xms4g                      # 初始堆，生产建议和 -Xmx 一致-Xmx4g                      # 最大堆-Xmn1g                      # 新生代大小（G1 不建议手工设）-XX:SurvivorRatio=8         # ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/blog/img/avatar.jpg" onerror="this.onerror=null;this.src='/blog/img/friend_404.gif'" alt="avatar"/ loading='lazy'></div><div class="author-info-name">初魁</div><div class="author-info-description">Java基础知识点教程，涵盖Java语法、面向对象、集合框架、多线程、IO流、网络编程、JDBC、Lambda等核心内容，适合零基础入门和系统复习。</div><div class="site-data"><a href="/blog/archives/"><div class="headline">文章</div><div class="length-num">67</div></a><a href="/blog/tags/"><div class="headline">标签</div><div class="length-num">246</div></a><a href="/blog/categories/"><div class="headline">分类</div><div class="length-num">14</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/chukui2005"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">Java基础入门教程，从零到实战全覆盖 🚀</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%9E%83%E5%9C%BE%E5%9B%9E%E6%94%B6%E5%9F%BA%E7%A1%80%EF%BC%9A%E6%80%8E%E4%B9%88%E5%88%A4%E6%96%AD%E5%AF%B9%E8%B1%A1%E6%AD%BB%E4%BA%86"><span class="toc-number">1.</span> <span class="toc-text">垃圾回收基础：怎么判断对象死了</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%9F%A5%E8%AF%86%E7%82%B9%E9%80%9F%E8%A7%88"><span class="toc-number">1.1.</span> <span class="toc-text">核心知识点速览</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81%E6%80%8E%E4%B9%88%E5%88%A4%E6%96%AD%E4%B8%80%E4%B8%AA%E5%AF%B9%E8%B1%A1%E8%AF%A5%E8%A2%AB%E5%9B%9E%E6%94%B6"><span class="toc-number">1.2.</span> <span class="toc-text">一、怎么判断一个对象该被回收</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E5%BC%95%E7%94%A8%E8%AE%A1%E6%95%B0%EF%BC%9A%E7%AE%80%E5%8D%95%E4%BD%86%E6%9C%89%E8%87%B4%E5%91%BD%E7%BC%BA%E9%99%B7"><span class="toc-number">1.2.1.</span> <span class="toc-text">1.1 引用计数：简单但有致命缺陷</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-%E5%8F%AF%E8%BE%BE%E6%80%A7%E5%88%86%E6%9E%90%EF%BC%9AJVM-%E7%9A%84%E5%81%9A%E6%B3%95"><span class="toc-number">1.2.2.</span> <span class="toc-text">1.2 可达性分析：JVM 的做法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-3-GC-Roots-%E6%9C%89%E5%93%AA%E4%BA%9B"><span class="toc-number">1.2.3.</span> <span class="toc-text">1.3 GC Roots 有哪些</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E5%9B%9B%E7%A7%8D%E5%BC%95%E7%94%A8%E7%B1%BB%E5%9E%8B"><span class="toc-number">1.3.</span> <span class="toc-text">二、四种引用类型</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81%E4%B8%89%E7%A7%8D%E5%9F%BA%E7%A1%80%E5%9B%9E%E6%94%B6%E7%AE%97%E6%B3%95"><span class="toc-number">1.4.</span> <span class="toc-text">三、三种基础回收算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E6%A0%87%E8%AE%B0-%E6%B8%85%E9%99%A4%EF%BC%88Mark-Sweep%EF%BC%89"><span class="toc-number">1.4.1.</span> <span class="toc-text">3.1 标记-清除（Mark-Sweep）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%A4%8D%E5%88%B6%EF%BC%88Copying%EF%BC%89"><span class="toc-number">1.4.2.</span> <span class="toc-text">3.2 复制（Copying）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E6%A0%87%E8%AE%B0-%E6%95%B4%E7%90%86%EF%BC%88Mark-Compact%EF%BC%89"><span class="toc-number">1.4.3.</span> <span class="toc-text">3.3 标记-整理（Mark-Compact）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%88%86%E4%BB%A3"><span class="toc-number">1.4.4.</span> <span class="toc-text">3.4 为什么要分代</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E8%B7%A8%E4%BB%A3%E5%BC%95%E7%94%A8%E4%B8%8E%E5%8D%A1%E8%A1%A8"><span class="toc-number">1.5.</span> <span class="toc-text">四、跨代引用与卡表</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E4%B8%89%E8%89%B2%E6%A0%87%E8%AE%B0%EF%BC%9A%E5%B9%B6%E5%8F%91%E6%A0%87%E8%AE%B0%E7%9A%84%E6%A0%B8%E5%BF%83"><span class="toc-number">1.6.</span> <span class="toc-text">五、三色标记：并发标记的核心</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%B9%B6%E5%8F%91%E6%A0%87%E8%AE%B0%E4%BC%9A%E6%BC%8F%E6%A0%87"><span class="toc-number">1.6.1.</span> <span class="toc-text">5.1 并发标记会漏标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-STW-%E4%B8%8E%E5%AE%89%E5%85%A8%E7%82%B9"><span class="toc-number">1.6.2.</span> <span class="toc-text">5.2 STW 与安全点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81%E4%B8%80%E6%AC%A1%E5%AE%8C%E6%95%B4%E7%9A%84-GC-%E6%98%AF%E6%80%8E%E4%B9%88%E5%8F%91%E7%94%9F%E7%9A%84"><span class="toc-number">1.7.</span> <span class="toc-text">六、一次完整的 GC 是怎么发生的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E9%9D%A2%E8%AF%95%E9%87%8D%E7%82%B9%E6%B8%85%E5%8D%95"><span class="toc-number">1.8.</span> <span class="toc-text">七、面试重点清单</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B0%8F%E7%BB%93"><span class="toc-number">1.9.</span> <span class="toc-text">小结</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/11/20/gitglass/" title="我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交">我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交</a><time datetime="2026-11-20T03:01:39.000Z" title="发表于 2026-11-20 11:01:39">2026-11-20</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/10/17/deepseek-harness/" title="01 — DeepSeek Harness：Agent = 模型 + 工程底座">01 — DeepSeek Harness：Agent = 模型 + 工程底座</a><time datetime="2026-10-17T03:33:25.000Z" title="发表于 2026-10-17 11:33:25">2026-10-17</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/09/27/dbx-database-client/" title="我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx">我为什么卸载了 Navicat 和 Tiny RDM —— 聊聊 dbx</a><time datetime="2026-09-27T03:20:28.000Z" title="发表于 2026-09-27 11:20:28">2026-09-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/27/jvm06-jit/" title="06 — JIT编译与执行引擎：代码到底怎么跑起来的">06 — JIT编译与执行引擎：代码到底怎么跑起来的</a><time datetime="2026-05-27T13:22:39.000Z" title="发表于 2026-05-27 21:22:39">2026-05-27</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/blog/2026/05/26/openai-code-review/" title="我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK">我写了一个开源组件：OpenAI Code Review — 自动代码评审SDK</a><time datetime="2026-05-26T13:49:58.000Z" title="发表于 2026-05-26 21:49:58">2026-05-26</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 初魁</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.5-b1</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="translateLink" type="button" title="简繁转换">繁</button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blog/js/utils.js?v=5.5.5-b1"></script><script src="/blog/js/main.js?v=5.5.5-b1"></script><script src="/blog/js/tw_cn.js?v=5.5.5-b1"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar@0.1.16/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const parseViewBox = viewBox => {
+    if (!viewBox) return null
+    const parts = viewBox.trim().split(/[\s,]+/).map(n => Number(n))
+    if (parts.length !== 4 || parts.some(n => Number.isNaN(n))) return null
+    return parts
+  }
+
+  const getSvgViewBox = svg => {
+    const attr = parseViewBox(svg.getAttribute('viewBox'))
+    if (attr) return attr
+
+    // Fallback: use bbox to build a viewBox
+    try {
+      const bbox = svg.getBBox()
+      if (bbox && bbox.width && bbox.height) return [bbox.x, bbox.y, bbox.width, bbox.height]
+    } catch (e) {
+      // getBBox may fail on some edge cases; ignore
+    }
+
+    const w = Number(svg.getAttribute('width')) || 0
+    const h = Number(svg.getAttribute('height')) || 0
+    if (w > 0 && h > 0) return [0, 0, w, h]
+    return [0, 0, 100, 100]
+  }
+
+  const setSvgViewBox = (svg, vb) => {
+    svg.setAttribute('viewBox', `${vb[0]} ${vb[1]} ${vb[2]} ${vb[3]}`)
+  }
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v))
+
+  const openSvgInNewTab = ({ source, initViewBox }) => {
+    const getClonedSvg = () => {
+      if (typeof source === 'string') {
+        const template = document.createElement('template')
+        template.innerHTML = source.trim()
+        const svg = template.content.querySelector('svg')
+        return svg ? svg.cloneNode(true) : null
+      }
+      if (source && typeof source.cloneNode === 'function') {
+        return source.cloneNode(true)
+      }
+      return null
+    }
+
+    const clone = getClonedSvg()
+    if (!clone) return
+    if (initViewBox && initViewBox.length === 4) {
+      clone.setAttribute('viewBox', initViewBox.join(' '))
+    }
+    if (!clone.getAttribute('xmlns')) clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    if (!clone.getAttribute('xmlns:xlink') && clone.outerHTML.includes('xlink:')) {
+      clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink')
+    }
+    // inject background to match current theme
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark'
+    const bg = getComputedStyle(document.body).backgroundColor || (isDark ? '#1e1e1e' : '#ffffff')
+    if (!clone.style.background) clone.style.background = bg
+
+    const serializer = new XMLSerializer()
+    const svgSource = serializer.serializeToString(clone)
+    const htmlSource = `<!doctype html><html><head><meta charset="utf-8" />
+      <style>
+        html, body { width: 100%; height: 100%; margin: 0; display: flex; align-items: center; justify-content: center; background: ${bg}; }
+        svg { max-width: 100%; max-height: 100%; height: auto; width: auto; }
+      </style>
+      </head><body>${svgSource}</body></html>`
+    const blob = new Blob([htmlSource], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const attachMermaidViewerButton = wrap => {
+    let btn = wrap.querySelector('.mermaid-open-btn')
+    if (!btn) {
+      btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'mermaid-open-btn'
+      wrap.appendChild(btn)
+    }
+
+    btn.innerHTML = '<i class="fa fa-search fa-fw" aria-hidden="true"></i>'
+
+    if (!btn.__mermaidViewerBound) {
+      btn.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        const svg = wrap.__mermaidOriginalSvg || wrap.querySelector('svg')
+        if (!svg) return
+        const initViewBox = wrap.__mermaidInitViewBox
+        if (typeof svg === 'string') {
+          openSvgInNewTab({ source: svg, initViewBox })
+          return
+        }
+        openSvgInNewTab({ source: svg, initViewBox })
+      })
+      btn.__mermaidViewerBound = true
+    }
+  }
+
+  // Zoom around a point (px, py) in the SVG viewport (in viewBox coordinates)
+  const zoomAtPoint = (vb, factor, px, py) => {
+    const w = vb[2] * factor
+    const h = vb[3] * factor
+    const nx = px - (px - vb[0]) * factor
+    const ny = py - (py - vb[1]) * factor
+    return [nx, ny, w, h]
+  }
+
+  const initMermaidGestures = wrap => {
+    const svg = wrap.querySelector('svg')
+    if (!svg) return
+
+    // Ensure viewBox exists so gestures always work
+    const initVb = getSvgViewBox(svg)
+    wrap.__mermaidInitViewBox = initVb
+    wrap.__mermaidCurViewBox = initVb.slice()
+    setSvgViewBox(svg, initVb)
+
+    // Avoid binding multiple times on themeChange/pjax
+    if (wrap.__mermaidGestureBound) return
+    wrap.__mermaidGestureBound = true
+
+    // Helper: map client (viewport) coordinate -> viewBox coordinate
+    const clientToViewBox = (clientX, clientY) => {
+      const rect = svg.getBoundingClientRect()
+      const vb = wrap.__mermaidCurViewBox || getSvgViewBox(svg)
+      const x = vb[0] + (clientX - rect.left) * (vb[2] / rect.width)
+      const y = vb[1] + (clientY - rect.top) * (vb[3] / rect.height)
+      return { x, y, rect, vb }
+    }
+
+    const state = {
+      pointers: new Map(),
+      startVb: null,
+      startDist: 0,
+      startCenter: null
+    }
+
+    const clampVb = vb => {
+      const init = wrap.__mermaidInitViewBox || vb
+      const minW = init[2] * 0.1
+      const maxW = init[2] * 10
+      const minH = init[3] * 0.1
+      const maxH = init[3] * 10
+      vb[2] = clamp(vb[2], minW, maxW)
+      vb[3] = clamp(vb[3], minH, maxH)
+      return vb
+    }
+
+    const setCurVb = vb => {
+      vb = clampVb(vb)
+      wrap.__mermaidCurViewBox = vb
+      setSvgViewBox(svg, vb)
+    }
+
+    const onPointerDown = e => {
+      // Allow only primary button for mouse
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      svg.setPointerCapture(e.pointerId)
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      if (state.pointers.size === 1) {
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      } else if (state.pointers.size === 2) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        state.startDist = Math.hypot(dx, dy)
+        state.startVb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        state.startCenter = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }
+      }
+    }
+
+    const onPointerMove = e => {
+      if (!state.pointers.has(e.pointerId)) return
+      state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+      // Pan with 1 pointer
+      if (state.pointers.size === 1 && state.startVb) {
+        const p = [...state.pointers.values()][0]
+        const prev = { x: e.clientX - e.movementX, y: e.clientY - e.movementY }
+        // movementX/Y unreliable on touch, compute from stored last position
+        const last = wrap.__mermaidLastSinglePointer || p
+        const dxClient = p.x - last.x
+        const dyClient = p.y - last.y
+        wrap.__mermaidLastSinglePointer = p
+
+        const { rect } = clientToViewBox(p.x, p.y)
+        const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+        const dx = dxClient * (vb[2] / rect.width)
+        const dy = dyClient * (vb[3] / rect.height)
+        setCurVb([vb[0] - dx, vb[1] - dy, vb[2], vb[3]])
+        return
+      }
+
+      // Pinch zoom with 2 pointers
+      if (state.pointers.size === 2 && state.startVb && state.startDist > 0) {
+        const pts = [...state.pointers.values()]
+        const dx = pts[0].x - pts[1].x
+        const dy = pts[0].y - pts[1].y
+        const dist = Math.hypot(dx, dy)
+        if (!dist) return
+        const factor = state.startDist / dist // dist bigger => zoom in (viewBox smaller)
+
+        const cx = (pts[0].x + pts[1].x) / 2
+        const cy = (pts[0].y + pts[1].y) / 2
+        const centerClient = { x: cx, y: cy }
+
+        const pxy = clientToViewBox(centerClient.x, centerClient.y)
+        const cpx = pxy.x
+        const cpy = pxy.y
+
+        const vb = zoomAtPoint(state.startVb, factor, cpx, cpy)
+        setCurVb(vb)
+      }
+    }
+
+    const onPointerUpOrCancel = e => {
+      state.pointers.delete(e.pointerId)
+      if (state.pointers.size === 0) {
+        state.startVb = null
+        state.startDist = 0
+        state.startCenter = null
+        wrap.__mermaidLastSinglePointer = null
+      } else if (state.pointers.size === 1) {
+        // reset single pointer baseline to avoid jump
+        wrap.__mermaidLastSinglePointer = [...state.pointers.values()][0]
+      }
+    }
+
+    // Wheel zoom (mouse/trackpad)
+    const onWheel = e => {
+      // ctrlKey on mac trackpad pinch; we treat both as zoom
+      e.preventDefault()
+      const delta = e.deltaY
+      const zoomFactor = delta > 0 ? 1.1 : 0.9
+      const { x, y } = clientToViewBox(e.clientX, e.clientY)
+      const vb = (wrap.__mermaidCurViewBox || getSvgViewBox(svg)).slice()
+      setCurVb(zoomAtPoint(vb, zoomFactor, x, y))
+    }
+
+    const onDblClick = () => {
+      const init = wrap.__mermaidInitViewBox
+      if (!init) return
+      wrap.__mermaidCurViewBox = init.slice()
+      setSvgViewBox(svg, init)
+    }
+
+    svg.addEventListener('pointerdown', onPointerDown)
+    svg.addEventListener('pointermove', onPointerMove)
+    svg.addEventListener('pointerup', onPointerUpOrCancel)
+    svg.addEventListener('pointercancel', onPointerUpOrCancel)
+    svg.addEventListener('wheel', onWheel, { passive: false })
+    svg.addEventListener('dblclick', onDblClick)
+  }
+
+  const runMermaid = ele => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    ele.forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+
+      // Clear old render (themeChange/pjax will rerun)
+      const oldSvg = item.querySelector('svg')
+      if (oldSvg) oldSvg.remove()
+      item.__mermaidGestureBound = false
+
+      const config = mermaidSrc.dataset.config ? JSON.parse(mermaidSrc.dataset.config) : {}
+      if (!config.theme) {
+        config.theme = theme
+      }
+      const mermaidThemeConfig = `%%{init: ${JSON.stringify(config)}}%%\n`
+      const mermaidID = `mermaid-${index}`
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+      const renderMermaid = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+        if (true) initMermaidGestures(item)
+        item.__mermaidOriginalSvg = svg
+        if (true) attachMermaidViewerButton(item)
+      }
+
+
+      // mermaid v9 and v10 compatibility
+      typeof renderFn === 'string' ? renderMermaid(renderFn) : renderFn.then(({ svg }) => renderMermaid(svg))
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+
+    codeMermaidEle.forEach(ele => {
+      const preEle = document.createElement('pre')
+      preEle.className = 'mermaid-src'
+      preEle.hidden = true
+      preEle.textContent = ele.textContent
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.appendChild(preEle)
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (true) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js').then(runMermaidFn)
+  }
+
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const applyThemeDefaultsConfig = theme => {
+    if (theme === 'dark-mode') {
+      Chart.defaults.color = "rgba(255, 255, 255, 0.8)"
+      Chart.defaults.borderColor = "rgba(255, 255, 255, 0.2)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    } else {
+      Chart.defaults.color = "rgba(0, 0, 0, 0.8)"
+      Chart.defaults.borderColor = "rgba(0, 0, 0, 0.1)"
+      Chart.defaults.scale.ticks.backdropColor = "transparent"
+    }
+  }
+
+  // Recursively traverse the config object and automatically apply theme-specific color schemes
+  const applyThemeConfig = (obj, theme) => {
+    if (typeof obj !== 'object' || obj === null) return
+
+    Object.keys(obj).forEach(key => {
+      const value = obj[key]
+      // If the property is an object and has theme-specific options, apply them
+      if (typeof value === 'object' && value !== null) {
+        if (value[theme]) {
+          obj[key] = value[theme] // Apply the value for the current theme
+        } else {
+          // Recursively process child objects
+          applyThemeConfig(value, theme)
+        }
+      }
+    })
+  }
+
+  const runChartJS = ele => {
+    window.loadChartJS = true
+
+    Array.from(ele).forEach((item, index) => {
+      const chartSrc = item.firstElementChild
+      const chartID = item.getAttribute('data-chartjs-id') || ('chartjs-' + index) // Use custom ID or default ID
+      const width = item.getAttribute('data-width')
+      const existingCanvas = document.getElementById(chartID)
+
+      // If a canvas already exists, remove it to avoid rendering duplicates
+      if (existingCanvas) {
+          existingCanvas.parentNode.remove()
+      }
+
+      const chartDefinition = chartSrc.textContent
+      const canvas = document.createElement('canvas')
+      canvas.id = chartID
+
+      const div = document.createElement('div')
+      div.className = 'chartjs-wrap'
+
+      if (width) {
+        div.style.width = width
+      }
+
+      div.appendChild(canvas)
+      chartSrc.insertAdjacentElement('afterend', div)
+
+      const ctx = document.getElementById(chartID).getContext('2d')
+
+      const config = JSON.parse(chartDefinition)
+
+      const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark-mode' : 'light-mode'
+
+      // Set default styles (initial setup)
+      applyThemeDefaultsConfig(theme)
+
+      // Automatically traverse the config and apply dual-mode color schemes
+      applyThemeConfig(config, theme)
+
+      new Chart(ctx, config)
+    })
+  }
+
+  const loadChartJS = () => {
+    const chartJSEle = document.querySelectorAll('#article-container .chartjs-container')
+    if (chartJSEle.length === 0) return
+
+    window.loadChartJS ? runChartJS(chartJSEle) : btf.getScript('https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js').then(() => runChartJS(chartJSEle))
+  }
+
+  // Listen for theme change events
+  btf.addGlobalFn('themeChange', loadChartJS, 'chartjs')
+  btf.addGlobalFn('encrypt', loadChartJS, 'chartjs')
+
+  window.pjax ? loadChartJS() : document.addEventListener('DOMContentLoaded', loadChartJS)
+})()</script><script>(() => {
+  const abcjsInit = () => {
+    const abcjsFn = () => {
+      setTimeout(() => {
+        const sheets = document.querySelectorAll(".abc-music-sheet")
+        for (let i = 0; i < sheets.length; i++) {
+          const ele = sheets[i]
+          if (ele.children.length > 0) continue
+
+          // Parse parameters from data-params attribute
+          let params = {}
+          const dp = ele.getAttribute("data-params")
+          if (dp) {
+            try {
+              params = JSON.parse(dp)
+            } catch (e) {
+              console.error("Failed to parse data-params:", e)
+            }
+          }
+
+          // Merge parsed parameters with the responsive option
+          // Ensures params content appears before responsive
+          const options = { ...params, responsive: "resize" }
+
+          // Render the music score using ABCJS.renderAbc
+          ABCJS.renderAbc(ele, ele.textContent, options)
+        }
+      }, 100)
+    }
+
+    if (typeof ABCJS === "object") {
+      abcjsFn()
+    } else {
+      btf.getScript("https://cdn.jsdelivr.net/npm/abcjs@6.6.0/dist/abcjs-basic-min.min.js").then(abcjsFn)
+    }
+  }
+
+  if (window.pjax) {
+    abcjsInit()
+  } else {
+    window.addEventListener("load", abcjsInit)
+  }
+
+  btf.addGlobalFn("encrypt", abcjsInit, "abcjs")
+})()</script></div><script defer="defer" id="ribbon" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-ribbon.min.js" size="150" alpha="0.6" zIndex="-1" mobile="false" data-click="false"></script><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-fluttering-ribbon.min.js"></script><script id="canvas_nest" defer="defer" color="0,0,255" opacity="0.7" zIndex="-1" count="99" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/canvas-nest.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = true;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js" defer="defer"></script><script>document.addEventListener('DOMContentLoaded', () => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      true
+        ? pjax.loadUrl('/blog/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})</script><script>(() => {
+  const option = null
+  const config = {"site_uv":false,"site_pv":false,"page_pv":false,"token":null}
+
+  const runTrack = () => {
+    if (typeof umami !== 'undefined' && typeof umami.track === 'function') {
+      umami.track(props => ({ ...props, url: window.location.pathname, title: GLOBAL_CONFIG_SITE.title }))
+    } else {
+      console.warn('Umami Analytics: umami.track is not available')
+    }
+  }
+
+  const loadUmamiJS = () => {
+    btf.getScript('https://cloud.umami.is/script.js', {
+      'data-website-id': '',
+      'data-auto-track': 'false',
+      ...option
+    }).then(() => {
+      runTrack()
+    }).catch(error => {
+      console.error('Umami Analytics: Error loading script', error)
+    })
+  }
+
+  const getData = async (isPost) => {
+    try {
+      const now = Date.now()
+      const keyUrl = isPost ? `&url=${window.location.pathname}&path=${window.location.pathname}` : ''
+      const headerList = { 'Accept': 'application/json' }
+
+      if (false) {
+        headerList['Authorization'] = `Bearer ${config.token}`
+      } else {
+        headerList['x-umami-api-key'] = config.token
+      }
+
+      const res = await fetch(`https://api.umami.is/v1/websites//stats?startAt=0000000000&endAt=${now}${keyUrl}`, {
+        method: "GET",
+        headers: headerList
+      })
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`)
+      }
+
+      return await res.json()
+    } catch (error) {
+      console.error('Umami Analytics: Failed to fetch data', error)
+      throw error
+    }
+  }
+
+  const insertData = async () => {
+    try {
+      if (GLOBAL_CONFIG_SITE.pageType === 'post' && config.page_pv) {
+        const pagePV = document.getElementById('umamiPV')
+        if (pagePV) {
+          const data = await getData(true)
+          if (data && data.pageviews) {
+            pagePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else {
+            console.warn('Umami Analytics: Invalid page view data received')
+          }
+        }
+      }
+
+      if (config.site_uv || config.site_pv) {
+        const data = await getData(false)
+
+        if (config.site_uv) {
+          const siteUV = document.getElementById('umami-site-uv')
+          if (siteUV && data && data.visitors) {
+            siteUV.textContent = typeof data.visitors.value !== 'undefined' ? data.visitors.value : data.visitors
+          } else if (siteUV) {
+            console.warn('Umami Analytics: Invalid site UV data received')
+          }
+        }
+
+        if (config.site_pv) {
+          const sitePV = document.getElementById('umami-site-pv')
+          if (sitePV && data && data.pageviews) {
+            sitePV.textContent = typeof data.pageviews.value !== 'undefined' ? data.pageviews.value : data.pageviews
+          } else if (sitePV) {
+            console.warn('Umami Analytics: Invalid site PV data received')
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Umami Analytics: Failed to insert data', error)
+    }
+  }
+
+  btf.addGlobalFn('pjaxComplete', runTrack, 'umami_analytics_run_track')
+  btf.addGlobalFn('pjaxComplete', insertData, 'umami_analytics_insert')
+
+
+  loadUmamiJS()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', insertData)
+  } else {
+    setTimeout(insertData, 100)
+  }
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
