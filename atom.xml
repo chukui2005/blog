@@ -10,12 +10,12 @@
   <rights>All rights reserved 2026, 初魁</rights>
   <subtitle>Java入门到进阶</subtitle>
   <title>初魁的技术博客</title>
-  <updated>2026-11-25T01:26:52.817Z</updated>
+  <updated>2026-11-25T03:26:59.338Z</updated>
   <entry>
     <author>
       <name>初魁</name>
     </author>
-    <category term="开源项目" scheme="https://chukui2005.github.io/categories/%E5%BC%80%E6%BA%90%E9%A1%B9%E7%9B%AE/"/>
+    <category term="开发工具" scheme="https://chukui2005.github.io/categories/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/"/>
     <category term="开源" scheme="https://chukui2005.github.io/tags/%E5%BC%80%E6%BA%90/"/>
     <category term="Git" scheme="https://chukui2005.github.io/tags/Git/"/>
     <category term="GitGlass" scheme="https://chukui2005.github.io/tags/GitGlass/"/>
@@ -36,7 +36,7 @@
 <p><img src="/blog/images/gitglass-workspace.png" alt="GitGlass 工作区"></p>]]>
     </summary>
     <title>我写了一个开源 Git 客户端：GitGlass —— 每一次改动，先看清再提交</title>
-    <updated>2026-11-25T01:26:52.817Z</updated>
+    <updated>2026-11-25T03:26:59.338Z</updated>
   </entry>
   <entry>
     <author>
