@@ -1,3 +1,4 @@
+https://chukui2005.github.io/2026/10/17/deepseek-harness/
 https://chukui2005.github.io/2026/05/09/docker01-basics/
 https://chukui2005.github.io/2026/05/06/postgresql01-basics/
 https://chukui2005.github.io/2026/11/20/gitglass/
@@ -282,6 +283,11 @@ https://chukui2005.github.io/tags/%E9%95%9C%E5%83%8F/
 https://chukui2005.github.io/tags/docker-compose/
 https://chukui2005.github.io/tags/%E9%83%A8%E7%BD%B2/
 https://chukui2005.github.io/tags/%E8%BF%90%E7%BB%B4/
+https://chukui2005.github.io/tags/Harness/
+https://chukui2005.github.io/tags/AI-Agent/
+https://chukui2005.github.io/tags/Cordis/
+https://chukui2005.github.io/tags/%E6%8F%92%E4%BB%B6%E5%8C%96/
+https://chukui2005.github.io/tags/%E6%9E%B6%E6%9E%84/
 https://chukui2005.github.io/categories/%E5%BC%80%E5%8F%91%E5%B7%A5%E5%85%B7/
 https://chukui2005.github.io/categories/%E6%90%9C%E7%B4%A2%E5%BC%95%E6%93%8E/
 https://chukui2005.github.io/categories/Java%E5%9F%BA%E7%A1%80/
@@ -294,3 +300,4 @@ https://chukui2005.github.io/categories/Redis/
 https://chukui2005.github.io/categories/Spring%E5%85%A8%E5%AE%B6%E6%A1%B6/
 https://chukui2005.github.io/categories/PostgreSQL/
 https://chukui2005.github.io/categories/Docker/
+https://chukui2005.github.io/categories/AI-Agent/
